@@ -1,0 +1,9 @@
+[project]
+name = "fiap-academic"
+version = "0.1.0"
+description = "Projetos e exercícios do curso de Inteligência Artificial da FIAP"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false

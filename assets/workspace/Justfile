@@ -1,0 +1,21 @@
+set shell := ["sh", "-cu"]
+set positional-arguments
+
+default: help
+
+# Instruções de utilização.
+help:
+    @python3 scripts/chapters.py help
+
+# Capítulos, alvos, comandos e diretórios de trabalho.
+list:
+    @python3 scripts/chapters.py list
+
+# Executa o alvo padrão; use --task ALVO para selecionar outro.
+run phase chapter *args:
+    @python3 scripts/chapters.py run "$@"
+
+# Verifica registro e dispatcher sem executar projetos ou acessar hardware.
+check:
+    @python3 scripts/chapters.py list
+    @python3 -m unittest discover -s tests -v

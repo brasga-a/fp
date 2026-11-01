@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.ipynb_checkpoints/
+
+# JavaScript / TypeScript
+node_modules/
+.vite/
+.vite-plus/
+
+# Artefatos de build (manifests e lockfiles devem ser versionados)
+target/
+dist/
+build/
+.pio/
+*.o
+*.a
+*.so
+
+# Credenciais e arquivos locais
+.env
+.env.*
+!.env.example
+!.env.*.example
+.aws/
+*.log
+.DS_Store
+
+# Operações temporárias do FP
+.fp-init.lock
+.fp-delete-*/
