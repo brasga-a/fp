@@ -49,13 +49,13 @@ fn bin() -> Command {
 fn parses_workspace_init_and_check_separately_from_create() {
     assert!(matches!(
         Cli::try_parse_from(["fp", "init"]).unwrap().command,
-        Commands::Init { check: false }
+        Commands::Init { check: false, .. }
     ));
     assert!(matches!(
         Cli::try_parse_from(["fp", "init", "--check"])
             .unwrap()
             .command,
-        Commands::Init { check: true }
+        Commands::Init { check: true, .. }
     ));
     assert!(matches!(
         Cli::try_parse_from(["fp", "create"]).unwrap().command,
@@ -208,7 +208,7 @@ fn check_is_read_only_for_missing_and_complete_workspaces() {
     let output = bin()
         .arg("--root")
         .arg(&root)
-        .args(["init", "--check"])
+        .args(["init", "--academic-only", "--check"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
@@ -219,7 +219,7 @@ fn check_is_read_only_for_missing_and_complete_workspaces() {
     let output = bin()
         .arg("--root")
         .arg(&root)
-        .args(["init", "--check"])
+        .args(["init", "--academic-only", "--check"])
         .output()
         .unwrap();
     assert!(
@@ -241,7 +241,7 @@ fn cli_uses_default_home_and_env_root_without_requiring_existing_structure() {
         if use_env {
             cmd.env("FP_ROOT", &root);
         }
-        let output = cmd.arg("init").output().unwrap();
+        let output = cmd.args(["init", "--academic-only"]).output().unwrap();
         assert!(
             output.status.success(),
             "{}",
@@ -261,7 +261,7 @@ fn missing_required_tools_report_failure_after_creating_structure() {
         .env("HOME", dir.path())
         .arg("--root")
         .arg(&root)
-        .arg("init")
+        .args(["init", "--academic-only"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));

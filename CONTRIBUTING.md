@@ -25,9 +25,9 @@ plugins, package manager ou executor próprio. A execução de capítulos contin
 sendo responsabilidade do Just e de `chapters.toml`.
 
 ```sh
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test --locked
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --locked
 cargo build --release --locked
 python3 tools/check_tui.py target/release/fp
 python3 tools/check_delete_tui.py target/release/fp
@@ -60,7 +60,7 @@ O projeto usa versionamento semântico: `MAJOR.MINOR.PATCH`.
   também incrementam MINOR e devem ser destacadas no changelog.
 - `MAJOR`: mudanças incompatíveis a partir da versão 1.0.
 
-A única fonte da versão do executável é `package.version` em `Cargo.toml`.
+A única fonte da versão do executável é `workspace.package.version` em `Cargo.toml`.
 Clap usa essa versão automaticamente em `fp --version` e `fp -V`.
 Não duplique uma constante de versão em `src/`. Versione `Cargo.lock`.
 Registre mudanças em `[Unreleased]` no [CHANGELOG.md](CHANGELOG.md); ao preparar
@@ -108,4 +108,31 @@ o rascunho manualmente antes de reexecutar. Releases existentes não são sobres
 cargo install --git https://github.com/brasga-a/fp.git --tag v0.1.0 --locked
 ```
 
-Para desenvolvimento local, use `cargo install --path . --locked`.
+Para desenvolvimento local, use `cargo install --path crates/fp-cli --locked`.
+
+## Workspace e bancos
+
+Os quatro crates ficam em `crates/`; só `fp-cli` depende das bibliotecas
+funcionais. Bibliotecas não dependem de Cliclack nem da CLI. A versão é herdada
+de `[workspace.package]`, incluindo o pacote `fiap-projects`. A raiz é virtual;
+instalação local: `cargo install --path crates/fp-cli --root ~/.local --force --locked`
+quando esse for o prefixo original. Não instale durante testes.
+
+Testes de bancos usam `Manager::new(Paths { ... })` e executáveis simulados,
+sem Docker real ou credenciais reais. Execute também
+`python3 tools/check_database_tui.py target/release/fp`. Agentes devem usar
+subcomandos completos com `--no-input --output json` e diretórios isolados;
+nunca navegar pela TUI. Novas operações devem compartilhar o mesmo núcleo nas
+duas interfaces. Preserve códigos `E_*`, stdout JSON limpo, dry-run e confirmação
+por identificador. Não execute o script legado nem altere seus dados.
+
+
+Em 0.3.0, `fp init` também prepara o runtime rootless. Nos testes acadêmicos use
+`--academic-only`; testes do bootstrap devem injetar `SetupHost` e caminhos
+`RuntimeLocation` temporários. Nunca chamem systemd/Docker reais ou baixem imagens.
+SQLite é embarcado: teste SQL real em arquivos temporários, sem mock de sqlite3.
+Ao atualizar pacotes rootless, revise a origem e fixe os novos hashes em
+`crates/fp-database/src/runtime.rs`; não use URLs ou versões fornecidas por entrada
+arbitrária. Credenciais locais são privadas, não criptografadas: não as inclua
+em fixtures, snapshots, commits ou logs. Apenas novas instâncias podem receber
+segredos automáticos; adoções preservam as credenciais e o daemon existentes.

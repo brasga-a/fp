@@ -49,25 +49,3 @@ pub fn open_zed(path: &Path) -> Result<()> {
     Command::new(find("zed")?).arg(path).spawn()?;
     Ok(())
 }
-
-/// Permite apontar uma instalação local sem depender de alias do shell.
-pub fn find_db() -> Result<PathBuf> {
-    if let Some(path) = env::var_os("FP_DB_BIN") {
-        let path = PathBuf::from(path);
-        let metadata = fs::metadata(&path)?;
-        if !metadata.is_file() || metadata.permissions().mode() & 0o111 == 0 {
-            return Err("FP_DB_BIN deve apontar para um executável db".into());
-        }
-        return Ok(path);
-    }
-    find("db")
-}
-
-pub fn run_db(db: &Path, args: &[String]) -> Result<i32> {
-    Ok(code(
-        Command::new(db)
-            .args(args)
-            .env("DB_EXECUTION_PROFILE", "user")
-            .status()?,
-    ))
-}

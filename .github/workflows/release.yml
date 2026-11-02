@@ -38,9 +38,9 @@ jobs:
         run: cargo install just --locked
       - name: Validar
         run: |
-          cargo fmt --check
-          cargo clippy --locked --all-targets -- -D warnings
-          cargo test --locked
+          cargo fmt --all --check
+          cargo clippy --workspace --locked --all-targets -- -D warnings
+          cargo test --workspace --locked
       - name: Compilar e empacotar
         env:
           TAG: ${{ github.ref_name }}

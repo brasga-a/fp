@@ -1,0 +1,21 @@
+[package]
+name = "fiap-projects"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "fp"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+cliclack.workspace = true
+console.workspace = true
+tempfile.workspace = true
+toml_edit.workspace = true
+serde_json.workspace = true
+fp-workspace = { path = "../fp-workspace" }
+fp-update = { path = "../fp-update" }
+fp-database = { path = "../fp-database" }

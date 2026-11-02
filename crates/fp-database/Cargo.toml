@@ -1,0 +1,17 @@
+[package]
+name = "fp-database"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tempfile.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+rusqlite = { version = "0.41.1", features = ["bundled", "hooks"] }
+
+self_update.workspace = true
+sha2.workspace = true
+tar.workspace = true
+flate2.workspace = true

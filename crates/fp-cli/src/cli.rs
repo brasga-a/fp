@@ -23,11 +23,14 @@ pub enum Commands {
         #[arg(long)]
         check: bool,
     },
-    /// Prepara o workspace acadêmico e diagnostica ferramentas no PATH
+    /// Prepara o workspace acadêmico e baixa o runtime rootless dos bancos
     Init {
         /// Verifica sem criar ou modificar arquivos
         #[arg(long)]
         check: bool,
+        /// Prepara somente os arquivos acadêmicos, sem baixar o runtime de bancos
+        #[arg(long)]
+        academic_only: bool,
     },
     /// Inicia o assistente inline de criação
     Create,
@@ -44,12 +47,9 @@ pub enum Commands {
     },
     /// Lista fases, capítulos, tecnologias e comandos registrados
     List,
-    /// Delega para o db local (perfil de usuário, sem sudo automático)
-    #[command(disable_help_flag = true)]
-    Db {
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        args: Vec<String>,
-    },
+    /// Gerenciador nativo de bancos; sem operação abre a TUI
+    #[command(visible_alias = "database")]
+    Db(Box<crate::database::Database>),
 }
 
 impl Cli {

@@ -254,3 +254,144 @@ em `~/.local/bin/fp` com marcador standalone; Cargo e pacotes usam o método
 original. SHA-256 protege integridade, sem assinatura independente de autoria.
 A publicação inicial com esta automação exige preparar uma nova versão e tag
 (por exemplo, `0.2.0`), conforme README/CONTRIBUTING.
+
+## Cargo workspace e gerenciador nativo — 2026-11-02
+
+Versão preparada: `0.2.0`, única fonte em `[workspace.package]` na raiz;
+`fiap-projects` permanece o pacote do executável `fp`. Quatro crates: fp-cli,
+fp-workspace, fp-database e fp-update. Os módulos acadêmicos foram migrados com
+reexports na biblioteca da CLI para preservar interfaces dos testes; lógica de
+exclusão, bootstrap, registro e processos fica em fp-workspace, apresentação na
+CLI. O atualizador expõe consulta/plano/instalação sem prompts na biblioteca.
+
+A referência usada foi `~/Work/db`: db, README, tests/test_db.py e
+scripts/setup-docker-user estavam disponíveis. `~/Work/db.zip` também existe;
+sua listagem foi conferida. Dados, logs e locks de `.db/` não foram tratados
+como fontes, copiados ou alterados. Nenhuma credencial de desenvolvimento foi
+incorporada ao código. O wrapper externo e FP_DB_BIN foram removidos; três
+testes específicos de delegação foram substituídos por testes do gerenciador.
+
+Validações:
+
+- cargo fmt --all --check.
+- cargo clippy --workspace --all-targets -- -D warnings.
+- cargo test --workspace --locked: 85 testes Rust, incluindo 12 do updater,
+  9 da API de bancos e 3 de parsing/automação de bancos. O dispatcher continua
+  executando seus 11 testes Python dentro da integração acadêmica.
+- cargo build --release --locked; versão resultante `fp 0.2.0`.
+- Ajuda principal, db e database; aliases por flags e rejeição de ações conflitantes.
+- JSON sem TTY, sem ANSI, consultas sem criar diretórios e visual recusado com no-input.
+- PTY: 13 cenários acadêmicos de criação, 5 de exclusão e 5 de bancos.
+- python3 tools/test_release.py: 3 testes; check_release.py aceitou v0.2.0.
+- actionlint 1.7.12 aprovou o workflow adaptado ao workspace.
+- Pacote tar com fp e SHA-256 validado localmente, sem upload.
+- Cargo metadata: quatro crates com versão herdada, sem ciclos ou dependência
+  de fp-cli/Cliclack/Clap nas bibliotecas funcionais.
+
+Os testes usam apenas temporários e executáveis simulados. SQLite é exercitado
+com um cliente simulado baseado na biblioteca sqlite3 do Python, incluindo
+execução de SQL. Docker simulado cobre criação sem start, persistência, adoção
+legada, identidade, credenciais, autenticação MongoDB, timeout, inicialização
+falha, locks, remoção explícita e preservação de dados importados. Nenhum Docker
+real, script db legado ou credencial real foi utilizado nos testes.
+
+Limitações operacionais:
+
+- O gerenciador usa sqlite3 instalado no PATH; Oracle/MongoDB exigem Docker e
+  clientes internos das imagens. Não foram executados servidores reais.
+- run inicia e retorna; --wait consulta health/ping e pode expirar sem parar o
+  banco. Pull/create pode exceder timeout e deixar recursos para inspeção manual.
+- Não há transação única entre Docker, filesystem e registro; falhas parciais
+  preservam dados/registro para diagnóstico e adoção manual, sem limpeza destrutiva.
+- Oracle exec usa autenticação local SYSDBA no FREEPDB1 para o script solicitado.
+  provision-user só cria/granta quando o usuário ainda não existe. A verificação
+  de idempotência SQL deve ser confirmada em uma instância descartável pelo usuário.
+- O registro não guarda senhas, mas Docker armazena variáveis dos containers em
+  metadados acessíveis a quem controla o daemon. Scripts/logs solicitados podem
+  conter dados sensíveis próprios do usuário; revise-os antes de compartilhar.
+- Nenhuma migração automática. Importação exige create --existing explícito;
+  dados importados não podem ser apagados pelo FP. init legado informa migração.
+- Um lock remanescente após interrupção abrupta precisa de inspeção manual.
+
+Não foram criados commits, tags, pushes ou releases. A instalação global não
+foi atualizada: os dois executáveis existentes continuam com SHA-256
+`0cdc6cc4df947e8208d63697575a9ab7a9e385a641a4b10ccee6c1e2ff9d302f`.
+O Justfile acadêmico mantém SHA-256
+`ca2465a1b34e3ba94d1b5a8e7e87960ff6544033ddffe9b9192db3791d502058`.
+
+## Bootstrap rootless e credenciais automáticas — 0.3.0
+
+`fp init` agora combina o preparo acadêmico e o setup do runtime de bancos.
+`--academic-only` preserva o caminho sem downloads; `--check` apenas consulta.
+`fp db init --setup-runtime` e a opção correspondente na TUI preparam somente
+os bancos. A versão compartilhada e Cargo.lock foram atualizados para 0.3.0.
+
+O setup fixa Docker/rootless extras 29.9.2 e slirp4netns 1.3.7, com hashes
+SHA-256 revisados no código. Os pacotes oficiais foram baixados em `/tmp` para
+inspeção e conferência dos hashes, sem executar instalador remoto. Runtime,
+dados, configuração do daemon/cliente, socket e serviço systemd são exclusivos
+do FP. O cliente usa a conexão persistida por recurso; registros antigos
+continuam na conexão anterior. Imagens públicas são baixadas sem docker login;
+uma imagem já presente é reutilizada. Nenhum container é criado pelo init.
+
+Novos recursos podem usar credenciais aleatórias de /dev/urandom, com arquivos
+regulares 0600 em diretório 0700. Registro, argv e logs do FP não contêm os
+valores. Arquivos ausentes/inseguros causam falha, sem redefinir senha existente.
+Variáveis explícitas e adoção legada continuam disponíveis. Esses segredos são
+protegidos por permissões, não criptografados em disco.
+
+SQLite agora é embarcado por rusqlite com bundled/hooks. SQL foi exercitado
+com bancos temporários reais, incluindo consulta de resultados; sqlite3 não é
+mais uma dependência de execução. Dependências adicionais do bootstrap são
+self_update, sha2, tar e flate2, reutilizando bibliotecas já usadas pelo updater.
+
+Validações concluídas:
+
+- cargo fmt --all --check.
+- cargo clippy --workspace --all-targets -- -D warnings.
+- cargo test --workspace --locked: 92 testes Rust, incluindo 7 novos testes do
+  bootstrap, segredos, roteamento e SQLite embarcado. Sem falhas.
+- cargo build --release --locked; saída fp 0.3.0.
+- 23 cenários PTY existentes (13 create, 5 delete, 5 bancos).
+- 3 testes Python de tags, validação de v0.3.0 e actionlint sem erros.
+- Bootstrap simulado: pré-requisito ausente sem escrita/download, checksum
+  inválido sem publicação, setup idempotente, serviço alheio preservado,
+  imagens baixadas uma vez, nenhuma chamada sudo/login/context use.
+- Segredos diferentes por recurso, idempotência, permissões, symlink recusado
+  e ausência sem regeneração. JSON/argv não recebem valores secretos.
+- Roteamento para socket privado com credenciais geradas, sem alterar o cliente
+  legado; SQLite funciona sem executável externo.
+
+Os testes não iniciaram Docker/systemd reais nem tocaram bancos, unidades do
+usuário ou o workspace acadêmico real. O Justfile continua com SHA-256
+`ca2465a1b34e3ba94d1b5a8e7e87960ff6544033ddffe9b9192db3791d502058`.
+Durante os testes, ambas as instalações Cargo 0.2.0 foram preservadas com hash
+`5d023f7fa9774445d351e8e468ba06e46462f21232fce6d77414c5e213a46b68`.
+
+Limitações explícitas: Linux x86_64, sessão systemd de usuário, newuidmap,
+newgidmap, iptables e subuid/subgid devem estar disponíveis. Esta máquina possui
+os mapeamentos e os helpers de UID/GID; faltavam os componentes rootless, agora
+obtidos pelo bootstrap. Sistemas sem esses pré-requisitos exigem preparação
+administrativa única; o FP não tenta conceder privilégios por conta própria.
+Não foi validado um daemon rootless real ou uma inicialização real das imagens
+Oracle/MongoDB nesta implementação. Downloads iniciais podem ocupar vários GB
+e dependem de rede/espaço/limites anônimos do registry. Nenhum login é solicitado
+em caso de falha: o erro orienta repetir o setup. Linger não é configurado.
+Não há migração automática nem alteração de credenciais de recursos existentes.
+
+Após a validação, as duas instalações Cargo locais foram atualizadas para
+`fp 0.3.0`, preservando seus prefixos. A checagem real read-only
+`fp db init --setup-runtime --dry-run --no-input --output json` passou pelos
+pré-requisitos desta máquina e retornou `ready: false` para o socket
+`/run/user/1000/fp-docker/docker.sock`, confirmando que o runtime ainda não foi
+instalado/iniciado. Nenhuma imagem real ou serviço foi iniciado por essa checagem.
+O próximo `fp init` do usuário fará o download e a preparação efetiva.
+
+## Preparação da publicação v0.3.0
+
+Na revalidação pré-publicação foi observada uma falha intermitente ao iniciar
+um executável simulado recém-escrito. O executor passou a repetir somente spawn
+recusado por ETXTBSY, de forma limitada, e a preservar a causa dos demais erros.
+Comandos que já iniciaram não são repetidos. O conjunto de testes de bancos
+passou em 20 execuções consecutivas; depois passaram novamente os 92 testes do
+workspace, fmt, Clippy, build release e validadores de tag/workflow.

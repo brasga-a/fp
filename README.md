@@ -15,7 +15,7 @@ ecossistemas e a execução ao Just.
 
 ```sh
 cd ~/Work/fp
-cargo install --path . --locked
+cargo install --path crates/fp-cli --locked
 fp --help
 ```
 
@@ -285,24 +285,14 @@ exibida. Não há dependência de aliases ou funções Fish.
 ## Organização do código
 
 ```text
-Cargo.toml / Cargo.lock       dependências e release reproduzível com --locked
-src/main.rs                  entrada e códigos de saída
-src/cli.rs                   argumentos Clap
-src/root.rs                  resolução de caminhos e validação da raiz
-src/workspace.rs             bootstrap e diagnóstico de PATH
-src/update.rs                consulta e atualização standalone pelo GitHub
-assets/workspace/            arquivos portáveis embutidos no binário
-src/discovery.rs             numeração, nomes e manifests
-src/tui.rs                   fluxo Cliclack e listagem
-src/technology_menu.rs       disponibilidade e seletor com itens desabilitados
-src/create.rs                  plano, inicializadores e publicação
-src/delete.rs                TUI e exclusão com atualização do registro
-src/registry.rs              edição preservando chapters.toml
-src/processes.rs             processos, Just e Zed
-tests/contracts.rs           testes Cargo isolados
-tests/delete.rs              exclusão, cancelamento e preservação de arquivos
-tests/workspace.rs           bootstrap, idempotência e diagnóstico
-tools/check_tui.py            smoke tests opcionais em pseudoterminal
+Cargo.toml / Cargo.lock       manifesto virtual e dependências compartilhadas
+crates/fp-cli                 pacote fiap-projects; binário fp, Clap e TUIs
+crates/fp-workspace           operações acadêmicas, Just, registro e bootstrap
+crates/fp-database            API de bancos; model.rs, manager.rs e process.rs
+crates/fp-update              API de consulta e instalação segura de releases
+assets/                      templates acadêmicos compartilhados
+tests/fixtures/              artefatos simulados de atualização
+tools/                       validações e cenários PTY
 ```
 
 Dependências diretas: Clap, Cliclack, `console`, `toml_edit` (preservar TOML), `serde_json`
@@ -326,7 +316,7 @@ cargo test --locked
 cargo build --release --locked
 ./target/release/fp --help
 python3 tools/check_tui.py target/release/fp
-cargo install --path . --release --locked
+cargo install --path crates/fp-cli --release --locked
 ```
 
 O perfil release usa `opt-level = "s"`, LTO thin e remoção de símbolos. Entrega um
@@ -355,31 +345,6 @@ Consulte [VALIDATION.md](VALIDATION.md) para os resultados desta implementação
   locais e não ganham ambiente até sua ferramenta precisar dele.
 - Melhorias possíveis: validar versões suportadas dos inicializadores e ampliar
   testes em ambientes com Vite+, hardware PlatformIO e Zed reais.
-
-## Wrapper do banco local: `fp db`
-
-```sh
-fp db init --oracle
-fp db init --mongodb
-fp db init --sqlite
-fp db list
-fp db connect sqlite
-fp db connect oracle
-fp db --help
-```
-
-Executa o `db` disponível no PATH, herdando terminal, diretório atual e código
-de saída. Não exige uma raiz acadêmica válida. Se necessário, `FP_DB_BIN` pode
-apontar para outro executável `db`; não usa aliases ou funções do shell.
-`fp db --help` mostra a ajuda original do db.
-
-O wrapper define `DB_EXECUTION_PROFILE=user`. O db atual usa as permissões do
-usuário, respeita o contexto/host Docker existente e não chama sudo
-automaticamente. A configuração única do grupo e serviço Docker está documentada
-em [~/Work/db/README.md](../db/README.md). É preciso entrar novamente na sessão
-para carregar o grupo Docker. Containers, volumes e SQLite continuam gerenciados
-pelo db original. Bash é uma dependência do script db; o executável FP continua
-nativo e não incorpora outro executor de bancos.
 
 ## Contribuição e versões
 
@@ -481,7 +446,7 @@ ou de origem incerta devem ser atualizados pelo método original. Um gerenciador
 que instale nesse prefixo deve remover o marcador standalone ao assumir o arquivo;
 nenhuma heurística consegue reconhecer todos os gerenciadores possíveis.
 
-Para Cargo, repita `cargo install --path . --force --locked` no checkout atualizado,
+Para Cargo, repita `cargo install --path crates/fp-cli --force --locked` no checkout atualizado,
 ou `cargo install --git https://github.com/brasga-a/fp.git --tag vX.Y.Z --force --locked`.
 Para pacotes do sistema, use o gerenciador original. O FP não chama sudo, não
 muda permissões de diretórios protegidos e não altera Justfile nem `~/fiap`.
@@ -502,7 +467,7 @@ interrompidos ou checksums ausentes/divergentes não são instalados.
 
 ### Publicar uma nova versão
 
-A única fonte da versão é `package.version` em `Cargo.toml`; Clap incorpora essa
+A única fonte da versão é `workspace.package.version` em `Cargo.toml`; Clap incorpora essa
 versão no build. Não existe incremento automático. Edite a versão, atualize o
 `Cargo.lock` com `cargo check` e prepare a seção correspondente do CHANGELOG.
 Execute as validações de [CONTRIBUTING.md](CONTRIBUTING.md), revise e faça commit.
@@ -537,9 +502,9 @@ prepare outra versão. Não reutilize um número de versão já lançado.
 Para testar sem rede nem instalações reais:
 
 ```sh
-cargo test --locked update::tests
+cargo test -p fp-update --locked
 python3 tools/test_release.py
-python3 tools/check_release.py v0.1.0 # ajuste se a versão mudar
+python3 tools/check_release.py v0.2.0 # ajuste se a versão mudar
 ```
 
 Os testes usam HTTP injetado e fixtures, inclusive checksum ausente/inválido,
@@ -551,3 +516,251 @@ Uma segunda fixture, em formato de script, testa a rejeição de binário invál
 A biblioteca foi consultada na [documentação de self_update](https://docs.rs/self_update/1.3.3/self_update/).
 Dependências diretas novas: `self_update` (cliente síncrono ureq, rustls, GitHub,
 tar/gzip e checksums) e `semver`. Não há runtime assíncrono no build do FP.
+
+## Gerenciador nativo de bancos (0.3.0)
+
+`fp db` e `fp database` são aliases. Não dependem do script `db` nem de
+`FP_DB_BIN`. O núcleo em Rust usa somente Docker e seus clientes internos para
+Oracle/MongoDB. SQLite está embarcado no executável e não exige Docker nem sqlite3.
+Os comandos não dependem de `~/fiap` e não modificam projetos acadêmicos.
+
+| Comando | Semântica |
+| --- | --- |
+| `init` | Prepara configuração/dados/estado; não cria nem inicia bancos |
+| `create` | Cria arquivo SQLite ou container parado com volume persistente |
+| `run` | Inicia recurso registrado; nunca cria implicitamente |
+| `stop` | Para o container, preservando os dados; SQLite não tem servidor |
+| `list` | Lista registros sem chamar Docker ou gravar arquivos |
+| `list --discover` | Consulta containers legados fiap-oracle/fiap-mongodb |
+| `status` | Consulta arquivo ou estado/health do container |
+| `logs` | Retorna últimos 100 registros Docker ou eventos locais do SQLite |
+| `exec` | Executa o script explicitamente indicado por `--file` |
+| `provision-user` | Cria usuário Oracle somente se não existe |
+| `delete` | Remove por padrão só o registro |
+| `visual` | Abre o menu Cliclack sobre a mesma API |
+
+A sintaxe canônica é `fp db create --engine sqlite --name estudos`.
+Clap também reconhece `--init`, `--create`, `--delete`, `--run` e `--visual`
+como nomes alternativos dos respectivos subcomandos, com os mesmos argumentos.
+Duas ações na mesma chamada são recusadas. Opções globais podem aparecer antes
+ou depois da ação. Não há `--force` para operações de bancos.
+
+### Automação e SQLite
+
+```sh
+fp db init --no-input --output json
+fp db create --engine sqlite --name estudos --no-input --output json
+fp db list --output json
+fp db status --name estudos --output json
+fp db exec --name estudos --file /caminho/consulta.sql --no-input --output json
+fp db create --engine sqlite --name importado --file /caminho/existente.db --existing --no-input
+```
+
+Exemplo de listagem vazia: `{"resources":[]}`. JSON de consultas/criação inclui
+identificadores, engine e parâmetros não sensíveis. `exec` retorna
+`{"id":"estudos","output":"..."}`. JSON não contém ANSI, banners ou spinners.
+Diagnósticos ficam em stderr, com identificadores como `E_NOT_FOUND`,
+`E_CONFIRM`, `E_CONFLICT`, `E_CREDENTIALS`, `E_BUSY`, `E_TOOL` e `E_TIMEOUT`;
+falhas retornam 2, sucesso retorna 0, cancelamento por Esc/Ctrl+C retorna 130.
+Erros de parsing são reportados pelo Clap em stderr e retornam 2.
+
+Todos os comandos diretos são não interativos. `--no-input` também impede abrir
+a interface visual acidentalmente. Sem ação, `fp db` abre o menu somente quando
+stdin e stderr são terminais; fora de TTY retorna orientação sem bloquear.
+Agentes devem sempre fornecer operação e parâmetros explícitos, usando
+`--no-input --output json`, sem navegar pela TUI.
+
+`--dry-run` está disponível para init/create/run/stop/exec/delete/provision-user:
+valida parâmetros e descreve a operação sem gravar arquivos nem executar scripts.
+Não garante espaço/permissão nem sucesso futuro de Docker. Operações sobre
+recursos existentes exigem registro mesmo em dry-run. Scripts SQL/JavaScript
+são código solicitado pelo usuário, com os privilégios do cliente; revise-os.
+
+### Configuração e estado
+
+Os padrões são `~/.config/fp/databases.json`, `~/.local/share/fp/` e
+`~/.local/state/fp/`. Variáveis `XDG_CONFIG_HOME`, `XDG_DATA_HOME` e
+`XDG_STATE_HOME` absolutas têm prioridade. Para isolamento/testes use
+`--config-dir`, `--data-dir` e `--state-dir`, com diretórios distintos dos reais.
+Nenhum banco novo é criado junto do executável ou automaticamente no código-fonte.
+
+`database.lock` serializa operações mutáveis. `database.log` contém eventos,
+sem senhas ou conteúdo dos scripts. Após queda abrupta, inspecione o processo
+indicado no lock e os recursos antes de remover um lock remanescente manualmente.
+O registro é salvo por temporário e rename. Arquivos SQLite e IDs Docker são
+conferidos para recusar substituições de identidade. Consultas não criam diretórios.
+
+### Oracle Free e MongoDB
+
+Execute `fp init` para preparar o Docker rootless e baixar as imagens públicas.
+Novos bancos recebem senha aleatória local e usuário MongoDB `fp`, sem pedir login.
+Opcionalmente, `--password-env VAR` e `--username` permitem configuração avançada
+ou adoção de recursos existentes, cujas credenciais nunca são redefinidas.
+
+```sh
+fp db init
+fp db create --engine oracle --name oracle-a --no-input
+fp db run --name oracle-a --no-input
+fp db status --name oracle-a --output json
+fp db run --name oracle-a --wait --timeout 600 --no-input
+fp db provision-user --name oracle-a --username estudante --password-env FP_STUDENT_PASSWORD --no-input
+fp db exec --name oracle-a --file /caminho/exercicios.sql --no-input
+fp db stop --name oracle-a --no-input
+
+fp db create --engine mongodb --name mongo-a --no-input
+fp db run --name mongo-a --no-input
+fp db exec --name mongo-a --file /caminho/consulta.js --no-input --output json
+```
+
+Imagem Oracle padrão: `gvenzl/oracle-free:23-slim` (pública, mantida pela comunidade),
+volume em `/opt/oracle/oradata`, porta 1521 e serviço `FREEPDB1`. MongoDB usa
+`mongo:8.0`, `/data/db` e porta 27017. Novos nomes são `fp-NOME` e
+`fp-NOME-data`; configure `--container`, `--volume`, `--image`, `--port` e
+`--host` explicitamente quando necessário. Apenas bindings de loopback
+`127.0.0.1` ou `::1` são aceitos. Não há alteração de Docker context/host,
+permissão de socket, grupos ou sudo automático.
+
+`create` pode baixar a imagem e tem timeout; não inicia o container.
+`run` retorna após iniciar, enquanto o servidor inicializa no Docker. Não há
+daemon FP ou worker Bash. `--wait` aguarda healthcheck Oracle/ping MongoDB,
+com prazo explícito; timeout não remove ou para o banco. Consulte status e logs.
+Um pull ou criação parcialmente concluído pode deixar imagem/volume/container;
+inspecione e adote explicitamente, sem apagar dados automaticamente.
+
+As senhas são geradas em arquivos privados separados do registro, ou vêm de
+variáveis explícitas. São encaminhadas sem aparecer no argv.
+Docker mantém variáveis do container em seus próprios metadados; usuários com
+acesso ao daemon podem inspecioná-las. Esse acesso equivale a privilégios
+administrativos. O FP não implementa um serviço de segredos nem copia credenciais
+legadas. `exec` MongoDB autentica automaticamente com o segredo local ou a
+variável explicitamente registrada.
+`exec` Oracle usa autenticação local SYSDBA **somente para o script solicitado**,
+no PDB `FREEPDB1`; use com cuidado. `provision-user` é explícito e idempotente:
+cria com quota de 100 MB e grants CREATE SESSION/CREATE TABLE apenas quando o
+usuário não existe, sem mudar senha ou grants de usuário existente.
+
+### Legado e exclusão
+
+Nenhuma importação acontece automaticamente. Para adotar Oracle antigo:
+
+```sh
+fp db list --discover --output json
+fp db create --engine oracle --name oracle-legado --existing \
+  --container fiap-oracle --volume fiap-oracle-data \
+  --image container-registry.oracle.com/database/free:latest --no-input
+```
+
+Para MongoDB, use engine mongodb, `fiap-mongodb`, `fiap-mongodb-data`, `mongo:8.0`,
+usuário existente e o nome da variável da senha existente. A adoção exige imagem
+e volume compatíveis, registra o ID Docker e não inicia, recria ou provisiona
+usuários. SQLite legado pode ser registrado com `--existing --file` apontando
+para `~/Work/db/.db/sqlite.db` (expanda `~` no shell). Não é sobrescrito nem migrado.
+
+`init --oracle`, `init --mongodb` e `init --sqlite` agora retornam mensagem de
+migração para create/run. `connect ID` consulta logs do registro Docker; para
+SQLite retorna orientação para `exec`. `-f ENGINE up` deve ser substituído por
+create/run explícitos. Não há fallback ao script original.
+
+```sh
+# Esquecer o registro, mantendo arquivo/container/volume:
+fp db delete --name estudos --confirm estudos --no-input
+# Remover container parado, mantendo seu volume:
+fp db delete --name oracle-a --confirm oracle-a --remove-container --no-input
+# Apagar dados criados pelo FP, de forma permanente:
+fp db delete --name mongo-a --confirm mongo-a --remove-container --delete-data --no-input
+fp db delete --name estudos --confirm estudos --delete-data --dry-run --no-input
+```
+
+`--confirm` deve ser exatamente o identificador, inclusive em dry-run.
+`--delete-data` nunca é implícito e, em Docker, exige `--remove-container`.
+O FP recusa apagar dados importados, volumes sem sua label ou containers em
+execução; pare-os antes. Não seleciona todos os bancos. Se a remoção Docker
+falhar parcialmente, o registro é preservado para diagnóstico; consulte Docker
+antes de repetir. Não há transação global entre filesystem, registro e Docker.
+
+### Interface visual
+
+`fp db`, `fp db visual`, `fp db --visual` e `fp database` abrem o mesmo menu
+inline Cliclack. Inclui criar/iniciar/parar/listar/status/scripts/excluir,
+configuração inicial, logs, descoberta e provisionamento de usuário Oracle.
+A criação coleta engine, nome, arquivo ou container/volume/imagem/porta/host,
+usuário e **nome da variável da senha**; mostra resumo e confirmação padrão Não.
+A exclusão mostra a persistência, pergunta separadamente sobre container/dados e
+exige digitar o identificador. Esc/Ctrl+C cancelam. Toda execução chama a mesma
+API usada pela CLI declarativa; o núcleo não depende de terminal ou Cliclack.
+
+O gerenciador usa serde, rusqlite com SQLite embarcado, self_update para download,
+SHA-256 e tar/gzip. Não há runtime assíncrono.
+
+
+## `fp init`: bancos sem sudo ou login repetido
+
+A partir de 0.3.0, `fp init` prepara os arquivos acadêmicos e também o runtime
+de bancos. Baixa os pacotes estáticos oficiais Docker 29.9.2 e rootless extras,
+além de slirp4netns 1.3.7, verificando SHA-256 fixado no código antes de extrair.
+Não baixa nem executa um instalador remoto. O launcher local é o oficial do
+Docker, incluído no pacote verificado.
+
+O FP cria somente seu serviço `fp-docker.service` em systemd **do usuário**,
+habilita-o para as sessões futuras e inicia-o. Não altera o daemon do sistema,
+contexto Docker global, grupos, permissões do socket ou shell/PATH do usuário.
+Os pacotes ficam em `$XDG_DATA_HOME/fp/runtime/`; imagens e volumes em
+`$XDG_DATA_HOME/fp/docker/`. O socket privado fica em
+`$XDG_RUNTIME_DIR/fp-docker/docker.sock`. A configuração do daemon é própria,
+assim como o diretório de configuração do cliente, sem consultar logins globais.
+Os padrões XDG continuam sendo os documentados acima.
+
+O setup baixa antecipadamente `gvenzl/oracle-free:23-slim` e `mongo:8.0`, sem
+criar bancos nem containers. Imagens já presentes são reutilizadas, inclusive
+sem conexão. O download inicial pode ocupar vários GB; falhas de rede, falta de
+espaço ou limites anônimos do registry retornam erro, sem pedir login ou informar
+sucesso. Execute `fp init` novamente para continuar.
+
+```sh
+fp init
+fp db create --engine mongodb --name estudos
+fp db run --name estudos
+fp db exec --name estudos --file /caminho/consulta.js
+fp db stop --name estudos
+```
+
+Nenhuma senha precisa ser digitada nesses comandos. O FP gera 32 bytes aleatórios
+por recurso e guarda sua representação hexadecimal em arquivos 0600 no diretório
+0700 `$XDG_CONFIG_HOME/fp/secrets/`. Os valores não aparecem no registro JSON,
+argv, resumos ou logs do FP. **Esses arquivos são protegidos por permissões, não
+criptografados em disco**. Inclua-os no backup privado junto aos dados; apagá-los
+não redefine a senha no banco. Credenciais também constam nos metadados internos
+do Docker, acessíveis a quem controla esse daemon.
+
+Novos recursos registram o socket dedicado. Registros anteriores sem esse campo
+continuam usando a conexão Docker anterior e são protegidos pela checagem de ID.
+Não há migração automática de dados, troca de senhas ou parada de containers
+legados. Dois daemons não podem publicar simultaneamente a mesma porta; use
+`--port` para o novo recurso se um banco anterior já ocupar a porta padrão.
+
+O runtime requer Linux x86_64, sessão systemd de usuário, user namespaces,
+newuidmap/newgidmap, iptables e ao menos 65536 IDs subordinados em `/etc/subuid`
+e `/etc/subgid`. Se um pré-requisito faltar, o FP interrompe **antes dos downloads**
+e informa a preparação administrativa única necessária. Nenhum programa em uma
+pasta de usuário consegue conceder esses privilégios por conta própria; o FP
+não executa sudo, não altera /etc e não enfraquece políticas do kernel.
+
+`fp init --check` verifica sem instalar/iniciar serviços ou baixar imagens.
+`fp init --academic-only` mantém o preparo apenas acadêmico. Para preparar bancos
+sem tocar no workspace acadêmico, use `fp db init --setup-runtime`; essa operação
+também aparece na TUI. `fp db init` isoladamente continua preparando só diretórios.
+`--dry-run` com `--setup-runtime` faz apenas a verificação. SQLite funciona até
+sem esse setup, pois agora faz parte do binário; aceita SQL, sem metacomandos do
+antigo shell sqlite3 como `.shell` ou `.read`.
+
+Para diagnóstico: `systemctl --user status fp-docker.service` e
+`journalctl --user -u fp-docker.service`. O serviço acompanha a sessão de usuário;
+execução antes do login/apos logout exigiria linger, que o FP não configura.
+A arquitetura rootless segue a [documentação Docker](https://docs.docker.com/engine/security/rootless/).
+A imagem Oracle pública e suas variáveis seguem a
+[documentação gvenzl](https://github.com/gvenzl/oci-oracle-free).
+
+Para adotar explicitamente um container já existente no daemon dedicado, use
+`fp db create --existing --rootless --engine ENGINE --name NOME` com imagem,
+container e volume corretos. Sem `--rootless`, adoções continuam consultando
+a conexão Docker anterior, preservando a compatibilidade com os bancos legados.

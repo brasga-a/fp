@@ -136,7 +136,7 @@ fn names_are_generated_from_kind_and_number_only() {
     assert_eq!(discovery::dirname("cap-", 123, &[]), "cap-123");
     assert!(matches!(
         Cli::try_parse_from(["fp", "init"]).unwrap().command,
-        Commands::Init { check: false }
+        Commands::Init { check: false, .. }
     ));
     assert!(Cli::try_parse_from(["fp", "create", "meu-nome"]).is_err());
 }
@@ -592,61 +592,6 @@ fn cli_preserves_initial_separator_for_project_task_flag() {
         assert!(output.status.success());
         assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
     }
-}
-
-#[test]
-fn db_delegates_without_academic_root_and_preserves_exit_status() {
-    let tools = tempdir().unwrap();
-    script(
-        tools.path(),
-        "db",
-        "test \"$DB_EXECUTION_PROFILE\" = user || exit 9\nprintf '<%s>\\n' \"$@\"\nexit 37",
-    );
-    let output = binary()
-        .env("PATH", tools.path())
-        .env("FP_ROOT", "/missing-fiap-root")
-        .args(["db", "init", "--mongodb"])
-        .output()
-        .unwrap();
-    assert_eq!(output.status.code(), Some(37));
-    assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        "<init>\n<--mongodb>\n"
-    );
-}
-
-#[test]
-fn db_help_and_arguments_reach_native_command() {
-    let tools = tempdir().unwrap();
-    let db = script(tools.path(), "custom-db", "printf '<%s>\\n' \"$@\"");
-    for args in [
-        vec!["--help"],
-        vec!["-f", "oracle", "up"],
-        vec!["connect", "a b;$(literal)"],
-    ] {
-        let output = binary()
-            .env("FP_DB_BIN", &db)
-            .args(["db"])
-            .args(&args)
-            .output()
-            .unwrap();
-        assert!(output.status.success());
-        let expected = args.iter().map(|s| format!("<{s}>\n")).collect::<String>();
-        assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
-    }
-}
-
-#[test]
-fn db_missing_binary_reports_clear_error() {
-    let tools = tempdir().unwrap();
-    let output = binary()
-        .env("PATH", tools.path())
-        .env_remove("FP_DB_BIN")
-        .args(["db", "list"])
-        .output()
-        .unwrap();
-    assert_eq!(output.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&output.stderr).contains("'db' ausente"));
 }
 
 #[test]

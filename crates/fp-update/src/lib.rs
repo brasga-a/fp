@@ -1,17 +1,11 @@
 //! Atualizações independentes da raiz acadêmica, restritas à instalação standalone.
-use crate::Result;
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 use self_update::{
     ReleaseAsset,
     backends::github::{Update, UpdateBuilder},
 };
 use semver::Version;
-use std::{
-    fs,
-    io::{IsTerminal, Read},
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
+use std::{fs, io::Read, path::Path, sync::Arc, time::Duration};
 
 const TARGET: &str = "x86_64-unknown-linux-gnu";
 const MARKER: &str = "fp-standalone: https://github.com/brasga-a/fp\n";
@@ -44,7 +38,7 @@ impl self_update::http_client::HttpClient for OfficialClient {
     }
 }
 
-fn builder() -> UpdateBuilder {
+pub fn builder() -> UpdateBuilder {
     let mut builder = Update::configure();
     builder
         .repo_owner("brasga-a")
@@ -63,7 +57,7 @@ fn builder() -> UpdateBuilder {
     builder
 }
 
-fn stable_version(tag: &str) -> Result<Version> {
+pub fn stable_version(tag: &str) -> Result<Version> {
     let version = Version::parse(tag.strip_prefix('v').unwrap_or(tag))
         .map_err(|_| format!("Versão inválida na release: {tag}"))?;
     if !version.pre.is_empty() || !version.build.is_empty() {
@@ -72,15 +66,15 @@ fn stable_version(tag: &str) -> Result<Version> {
     Ok(version)
 }
 
-fn newer(current: &str, latest: &str) -> Result<bool> {
+pub fn newer(current: &str, latest: &str) -> Result<bool> {
     Ok(stable_version(latest)? > stable_version(current)?)
 }
 
-fn artifact(version: &Version, target: &str) -> String {
+pub fn artifact(version: &Version, target: &str) -> String {
     format!("fp-v{version}-{target}.tar.gz")
 }
 
-fn select_asset(assets: &[ReleaseAsset], name: &str) -> Option<ReleaseAsset> {
+pub fn select_asset(assets: &[ReleaseAsset], name: &str) -> Option<ReleaseAsset> {
     let mut matches = assets
         .iter()
         .filter(|a| a.name() == name && a.download_url().starts_with(API));
@@ -88,7 +82,7 @@ fn select_asset(assets: &[ReleaseAsset], name: &str) -> Option<ReleaseAsset> {
     matches.next().is_none().then_some(found)
 }
 
-fn explain(error: self_update::Error) -> Box<dyn std::error::Error> {
+pub fn explain(error: self_update::Error) -> Box<dyn std::error::Error> {
     use self_update::Error::*;
     let message = match &error {
         RateLimited { .. } => "Limite da API do GitHub atingido; tente novamente mais tarde",
@@ -117,7 +111,7 @@ fn explain(error: self_update::Error) -> Box<dyn std::error::Error> {
 // Um marcador explícito evita inferir a origem de um executável apenas pelo PATH.
 // Não admitimos symlinks (inclusive nos ancestrais), hardlinks ou locais de Cargo.
 #[cfg(unix)]
-fn standalone(exe: &Path, home: &Path, cargo_home: Option<&Path>) -> Result<fs::Permissions> {
+pub fn standalone(exe: &Path, home: &Path, cargo_home: Option<&Path>) -> Result<fs::Permissions> {
     use std::os::unix::fs::MetadataExt;
     let expected = home.join(".local/bin/fp");
     let refuse = "Instalação gerenciada ou de origem incerta; atualize pelo método original. Consulte o README para instalação standalone";
@@ -161,11 +155,11 @@ fn standalone(exe: &Path, home: &Path, cargo_home: Option<&Path>) -> Result<fs::
 }
 
 #[cfg(not(unix))]
-fn standalone(_: &Path, _: &Path, _: Option<&Path>) -> Result<fs::Permissions> {
+pub fn standalone(_: &Path, _: &Path, _: Option<&Path>) -> Result<fs::Permissions> {
     Err("Atualização direta disponível somente para Linux x86_64 GNU".into())
 }
 
-fn unchanged(exe: &Path, original: &fs::Metadata) -> Result<()> {
+pub fn unchanged(exe: &Path, original: &fs::Metadata) -> Result<()> {
     use std::os::unix::fs::MetadataExt;
     let now = fs::symlink_metadata(exe)?;
     if now.dev() != original.dev()
@@ -180,7 +174,11 @@ fn unchanged(exe: &Path, original: &fs::Metadata) -> Result<()> {
     Ok(())
 }
 
-fn install_builder(version: &Version, exe: &Path, permissions: fs::Permissions) -> UpdateBuilder {
+pub fn install_builder(
+    version: &Version,
+    exe: &Path,
+    permissions: fs::Permissions,
+) -> UpdateBuilder {
     let original = fs::metadata(exe).ok();
     let install_path = exe.to_path_buf();
     let name = artifact(version, TARGET);
@@ -226,7 +224,7 @@ fn install_builder(version: &Version, exe: &Path, permissions: fs::Permissions) 
 
 // A confirmação e a instalação são injetáveis para testar cancelamento e falhas
 // sem jamais substituir o executável dos testes.
-fn confirmed_install(
+pub fn confirmed_install(
     confirm: impl FnOnce() -> Result<bool>,
     install: impl FnOnce() -> Result<()>,
 ) -> Result<bool> {
@@ -237,82 +235,72 @@ fn confirmed_install(
     Ok(true)
 }
 
-pub fn run(check: bool) -> Result<i32> {
+pub fn target() -> &'static str {
+    self_update::get_target()
+}
+
+/// Plano de atualização: mantém identidade e permissões até a instalação.
+pub struct InstallPlan {
+    version: semver::Version,
+    exe: std::path::PathBuf,
+    home: std::path::PathBuf,
+    cargo_home: Option<std::path::PathBuf>,
+    permissions: fs::Permissions,
+    identity: fs::Metadata,
+}
+pub struct Available {
+    pub version: semver::Version,
+    pub newer: bool,
+}
+pub fn check() -> Result<Available> {
     let releases = builder().build()?.get_latest_release().map_err(explain)?;
     let latest = releases
         .latest()
         .ok_or("Nenhuma release estável publicada")?;
-    let version = stable_version(latest.version())?;
-    let current = env!("CARGO_PKG_VERSION");
-    println!("Versão instalada: {current}\nÚltima versão estável: {version}");
-    if !newer(current, latest.version())? {
-        println!("O FP já está atualizado.");
-        return Ok(0);
+    Ok(Available {
+        version: stable_version(latest.version())?,
+        newer: newer(env!("CARGO_PKG_VERSION"), latest.version())?,
+    })
+}
+pub fn prepare_install(version: &semver::Version) -> Result<InstallPlan> {
+    if !newer(env!("CARGO_PKG_VERSION"), &version.to_string())? {
+        return Err("FP já atualizado; downgrade recusado".into());
     }
-    println!("Atualização disponível: v{version}");
-    if check {
-        return Ok(0);
+    if target() != TARGET {
+        return Err("Sem distribuição compatível com esta plataforma".into());
     }
-    if self_update::get_target() != TARGET {
-        return Err(format!(
-            "Sem distribuição compatível com {}",
-            self_update::get_target()
-        )
-        .into());
-    }
-    if select_asset(latest.assets(), &artifact(&version, TARGET)).is_none() {
-        return Err(format!("Release sem artefato compatível: {TARGET}").into());
+    let release = builder()
+        .build()?
+        .get_release_version(&format!("v{version}"))
+        .map_err(explain)?;
+    if select_asset(release.assets(), &artifact(version, TARGET)).is_none() {
+        return Err("Release sem artefato compatível com esta plataforma".into());
     }
     let exe = std::env::current_exe()?;
-    let home =
-        PathBuf::from(std::env::var_os("HOME").ok_or("HOME não definido; atualize manualmente")?);
-    let cargo_home = std::env::var_os("CARGO_HOME").map(PathBuf::from);
+    let home = std::path::PathBuf::from(std::env::var_os("HOME").ok_or("HOME ausente")?);
+    let cargo_home = std::env::var_os("CARGO_HOME").map(std::path::PathBuf::from);
     let permissions = standalone(&exe, &home, cargo_home.as_deref())?;
     let identity = fs::metadata(&exe)?;
-    if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
-        return Err("Execute fp update em um terminal para confirmar a atualização".into());
+    Ok(InstallPlan {
+        version: version.clone(),
+        exe,
+        home,
+        cargo_home,
+        permissions,
+        identity,
+    })
+}
+pub fn install(plan: InstallPlan) -> Result<()> {
+    standalone(&plan.exe, &plan.home, plan.cargo_home.as_deref())?;
+    unchanged(&plan.exe, &plan.identity)?;
+    let status = install_builder(&plan.version, &plan.exe, plan.permissions)
+        .build()?
+        .update()
+        .map_err(explain)?;
+    if !status.is_updated() {
+        return Err("A release mudou; consulte novamente".into());
     }
-    cliclack::intro("FP · Atualizar")?;
-    let installed = confirmed_install(
-        || {
-            Ok(
-                cliclack::confirm(format!("Atualizar de v{current} para v{version}?"))
-                    .initial_value(false)
-                    .interact()?,
-            )
-        },
-        || {
-            // Revalide após o prompt; nenhuma mudança da instalação antes da confirmação.
-            standalone(&exe, &home, cargo_home.as_deref())?;
-            unchanged(&exe, &identity)?;
-            let spinner = cliclack::spinner();
-            spinner.start("Baixando, verificando SHA-256 e instalando…");
-            let outcome = install_builder(&version, &exe, permissions)
-                .build()?
-                .update()
-                .map_err(explain);
-            match outcome {
-                Ok(status) if status.is_updated() => {
-                    spinner.stop("Instalação concluída");
-                    Ok(())
-                }
-                Ok(_) => {
-                    spinner.stop("Nenhuma instalação realizada");
-                    Err("A release mudou; execute fp update novamente".into())
-                }
-                Err(error) => {
-                    spinner.stop("Atualização não concluída");
-                    Err(error)
-                }
-            }
-        },
-    )?;
-    if installed {
-        cliclack::outro(format!("FP atualizado para v{version}!"))?;
-    } else {
-        cliclack::outro_cancel("Atualização cancelada; nenhum arquivo alterado")?;
-    }
-    Ok(0)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -320,6 +308,7 @@ mod tests {
     use super::*;
     use self_update::http_client::{HeaderMap, HttpClient, HttpResponse};
     use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::path::PathBuf;
     use std::{collections::HashMap, io::Cursor, sync::Mutex};
 
     struct Response(Vec<u8>, HeaderMap);
@@ -371,8 +360,8 @@ mod tests {
         mock.bodies.insert(format!("{API}assets/1"), archive.into());
         Arc::new(mock)
     }
-    const ARCHIVE: &[u8] = include_bytes!("../tests/fixtures/update/release.tar.gz");
-    const SUMS: &[u8] = include_bytes!("../tests/fixtures/update/SHA256SUMS");
+    const ARCHIVE: &[u8] = include_bytes!("../../../tests/fixtures/update/release.tar.gz");
+    const SUMS: &[u8] = include_bytes!("../../../tests/fixtures/update/SHA256SUMS");
 
     #[test]
     fn semver_normalization_and_no_downgrades() {
@@ -409,18 +398,13 @@ mod tests {
     fn check_only_fetches_release_metadata() {
         let mock = mock(Some(SUMS), ARCHIVE);
         let releases = builder()
+            .current_version("0.1.0")
             .http_client(mock.clone())
             .build()
             .unwrap()
             .get_latest_release()
             .unwrap();
-        assert!(
-            newer(
-                env!("CARGO_PKG_VERSION"),
-                releases.latest().unwrap().version()
-            )
-            .unwrap()
-        );
+        assert!(newer("0.1.0", releases.latest().unwrap().version()).unwrap());
         assert_eq!(*mock.calls.lock().unwrap(), [format!("{API}latest")]);
     }
     #[test]
@@ -452,6 +436,7 @@ mod tests {
                 &exe,
                 fs::Permissions::from_mode(0o755),
             )
+            .current_version("0.1.0")
             .http_client(mock(sums, archive))
             .build()
             .unwrap()
@@ -480,6 +465,7 @@ mod tests {
             &exe,
             fs::Permissions::from_mode(0o755),
         )
+        .current_version("0.1.0")
         .http_client(mock)
         .build()
         .unwrap()
@@ -513,11 +499,12 @@ mod tests {
             &exe,
             fs::Permissions::from_mode(0o755),
         )
+        .current_version("0.1.0")
         .http_client(mock(
             Some(include_bytes!(
-                "../tests/fixtures/update/INVALID_SHA256SUMS"
+                "../../../tests/fixtures/update/INVALID_SHA256SUMS"
             )),
-            include_bytes!("../tests/fixtures/update/invalid.tar.gz"),
+            include_bytes!("../../../tests/fixtures/update/invalid.tar.gz"),
         ))
         .build()
         .unwrap()
@@ -540,6 +527,7 @@ mod tests {
             &exe,
             fs::Permissions::from_mode(0o755),
         )
+        .current_version("0.1.0")
         .http_client(mock(Some(SUMS), ARCHIVE))
         .build()
         .unwrap()
@@ -555,6 +543,7 @@ mod tests {
                 fs::Permissions::from_mode(0o755)
             )
             .verify_binary(|_| Ok(()))
+            .current_version("0.1.0")
             .http_client(mock(Some(SUMS), ARCHIVE))
             .build()
             .unwrap()

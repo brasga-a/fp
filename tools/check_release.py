@@ -18,7 +18,7 @@ if __name__ == "__main__":
     try:
         metadata = json.loads(subprocess.check_output(
             ["cargo", "metadata", "--no-deps", "--format-version=1", "--locked"], text=True))
-        manifest = str(Path("Cargo.toml").resolve())
+        manifest = str(Path("crates/fp-cli/Cargo.toml").resolve())
         version = next(p["version"] for p in metadata["packages"] if p["manifest_path"] == manifest)
         validate(sys.argv[1], version)
     except (ValueError, IndexError) as error:

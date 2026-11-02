@@ -1,0 +1,14 @@
+[package]
+name = "fp-update"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+self_update.workspace = true
+semver.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

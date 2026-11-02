@@ -39,11 +39,11 @@
 
 ## Validation and releases
 
-- Run cargo fmt --check, cargo clippy --all-targets -- -D warnings,
-  cargo test --locked and cargo build --release --locked for code changes.
+- Run cargo fmt --all --check, cargo clippy --workspace --all-targets -- -D warnings,
+  cargo test --workspace --locked and cargo build --release --locked for code changes.
 - Exercise tools/check_tui.py and tools/check_delete_tui.py after changing prompts.
   Report what was validated and any remaining limitations.
-- Cargo.toml is the single source of the CLI version; Clap reads that version.
+- workspace.package.version in Cargo.toml is the single source of the CLI version; Clap reads that version.
   Keep Cargo.lock, CHANGELOG.md and Git release tags consistent. Follow the
   SemVer policy in CONTRIBUTING.md and never move an existing release tag.
 - Do not commit or push unless explicitly requested. Never force-push, discard
@@ -57,7 +57,7 @@
 - Record ongoing work under `[Unreleased]`. Before delivering a new CLI version,
   move its entries into a dated `[X.Y.Z]` section and retain `[Unreleased]` for
   subsequent work. A version entry does not require a Git tag or GitHub Release.
-- For user-visible CLI features or fixes, increment `package.version` in
+- For user-visible CLI features or fixes, increment `workspace.package.version` in
   Cargo.toml according to CONTRIBUTING.md: PATCH for compatible fixes, MINOR for
   new features (and breaking changes before 1.0), MAJOR for breaking changes
   from 1.0 onward. Group related changes into one version increment per delivery.
@@ -72,9 +72,50 @@
   executable. Keep version tests and fixtures independent of the current package
   version so future increments do not break simulated update tests.
 - Local Cargo updates do not require GitHub Actions. When installation is
-  requested, use `cargo install --path . --force --locked`, preserving the
+  requested, use `cargo install --path crates/fp-cli --force --locked`, preserving the
   original install prefix (`--root ~/.local` when applicable), and verify the
   actual `fp` resolved through PATH. Do not replace Cargo-managed files manually.
 - Incrementing a CLI version or updating its changelog does not authorize
   commits, pushes, tags or releases. Create and push `vX.Y.Z` tags only when
   explicitly requested; routine development pushes must not trigger releases.
+
+## Workspace and native database manager
+
+- Keep exactly the four functional crates in crates/: fp-cli (package
+  fiap-projects), fp-workspace, fp-database and fp-update. Functional libraries
+  must not depend on fp-cli, Cliclack or terminal prompts. UI belongs in fp-cli.
+- Prefer explicit database commands with --no-input --output json for agents.
+  Never instruct automation to navigate the TUI. Both interfaces must call the
+  same fp-database API, with structured arguments and explicit results.
+- init only configures directories; create provisions, run only starts existing
+  resources. Never invoke the legacy db script or FP_DB_BIN as a fallback.
+- Use XDG directories; tests must override Paths and simulate Docker/clients.
+  Never touch real containers, volumes, legacy .db files or installed fp in tests.
+- Require --confirm ID for deletion. Removing a registry entry, removing a
+  container and deleting persistent data are separate choices. Imported data
+  must be preserved. Validate resource identity before destructive operations.
+- Credentials use generated private per-resource files or explicit environment variables, never registry plaintext.
+  Do not modify Docker context, socket permissions, groups or invoke sudo.
+- Check all three PTY scripts after UI changes; test release paths from the
+  virtual manifest and keep workspace-inherited versions consistent.
+
+## Rootless bootstrap
+
+- fp init now bootstraps the dedicated database runtime unless --academic-only
+  is selected. init --check is read-only. Database init without --setup-runtime
+  still only prepares directories. Reflect this distinction in help and tests.
+- Download only pinned official Docker/rootless packages and slirp4netns with
+  SHA-256 verification before extraction. Never pipe remote installers to a shell.
+- Use only fp-docker.service in the user manager, with dedicated data/config,
+  client configuration and runtime socket. Never change global Docker context,
+  system daemon, groups, subuid/subgid, kernel policy or invoke sudo automatically.
+- Generate credentials for new resources only; keep secrets in a private 0700
+  directory and 0600 regular files, never JSON registry, argv or diagnostics.
+  Missing secrets must fail, never rotate credentials in an existing database.
+- Persist the endpoint for new rootless resources; preserve the original daemon
+  for legacy records. Never migrate existing volumes or passwords automatically.
+- SQLite is bundled through rusqlite; tests must not rely on a sqlite3 executable.
+  Bootstrap tests inject SetupHost and temporary RuntimeLocation, never real
+  systemd, downloads, databases or global user configuration.
+- Missing host prerequisites require a clear one-time administrative instruction;
+  never bypass namespaces/security policy to make bootstrap appear successful.
