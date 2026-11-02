@@ -89,9 +89,18 @@ git push --atomic origin main v0.1.0
 ```
 
 Nunca mova ou sobrescreva tags publicadas. Se precisar corrigir uma release,
-publique outra versão. Subir código e uma tag não publica automaticamente no
-crates.io nem cria uma GitHub Release com binários; essas distribuições são
-operações separadas.
+publique outra versão. O workflow [release.yml](.github/workflows/release.yml) valida a tag contra
+`Cargo.toml`, executa fmt/Clippy/testes e publica os binários e `SHA256SUMS` no
+GitHub Releases. Ele não publica no crates.io. `v0.1.0` já existe: não reutilize
+essa tag para incluir o novo workflow; prepare uma nova versão (por exemplo,
+`0.2.0`, por adicionar comandos) antes de publicar esses recursos.
+
+Valide a automação localmente com `python3 tools/test_release.py` e
+`python3 tools/check_release.py vVERSAO` (substitua pela versão do Cargo).
+Não há incremento automático, criação de tags ou push pelo workflow.
+O token padrão do Actions recebe escrita somente no job de publicação.
+Se um upload falhar, a release fica em rascunho; inspecione e conclua ou remova
+o rascunho manualmente antes de reexecutar. Releases existentes não são sobrescritas.
 
 ## Instalar uma versão publicada
 

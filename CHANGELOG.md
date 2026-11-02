@@ -5,7 +5,13 @@ As mudanças do FP seguem a política de versionamento semântico descrita em
 
 ## [Unreleased]
 
-Sem alterações após a primeira versão.
+### Adicionado
+
+- Distribuição Linux x86_64 GNU em GitHub Releases, com validação de tag,
+  testes, empacotamento e SHA-256 antes da publicação.
+- `fp update` com confirmação, checksum obrigatório e substituição segura de
+  instalações standalone reconhecidas; `fp update --check` somente consulta.
+- Guia de instalação standalone, integridade e publicação pelo GitHub Actions.
 
 ## [0.1.0] — 2026-11-01
 

@@ -290,6 +290,7 @@ src/main.rs                  entrada e códigos de saída
 src/cli.rs                   argumentos Clap
 src/root.rs                  resolução de caminhos e validação da raiz
 src/workspace.rs             bootstrap e diagnóstico de PATH
+src/update.rs                consulta e atualização standalone pelo GitHub
 assets/workspace/            arquivos portáveis embutidos no binário
 src/discovery.rs             numeração, nomes e manifests
 src/tui.rs                   fluxo Cliclack e listagem
@@ -305,7 +306,8 @@ tools/check_tui.py            smoke tests opcionais em pseudoterminal
 ```
 
 Dependências diretas: Clap, Cliclack, `console`, `toml_edit` (preservar TOML), `serde_json`
-(ler scripts JavaScript) e `tempfile` (staging e substituição atômica). `console` já é usado pelo Cliclack;
+(ler scripts JavaScript), `tempfile` (staging), `self_update` (GitHub Releases e
+substituição segura) e `semver` (comparação de versões). `console` já é usado pelo Cliclack;
 o FP usa a mesma dependência no seletor de tecnologias, pois Cliclack 0.5 não
 expõe itens desabilitados. Esse seletor reutiliza o Theme do Cliclack e mantém
 renderização inline, histórico e cancelamento. Sem runtime assíncrono ou framework.
@@ -391,3 +393,161 @@ Para instalar a primeira versão publicada:
 ```sh
 cargo install --git https://github.com/brasga-a/fp.git --tag v0.1.0 --locked
 ```
+
+## Distribuição e atualização pelo GitHub
+
+A plataforma inicial é **Linux x86_64**, target `x86_64-unknown-linux-gnu`.
+O build roda no Ubuntu 22.04, usando glibc 2.35 como base. Foi escolhido GNU para
+integração simples com Linux modernos, especialmente Arch e derivados. Não há
+build musl, suporte a Linux sem glibc, ARM, Windows ou macOS nesta etapa.
+Rust/Cargo só são necessários para compilar; o executável distribuído não exige Rust.
+
+As releases estáveis oficiais ficam em
+[brasga-a/fp](https://github.com/brasga-a/fp/releases). Cada tag `vX.Y.Z` publica:
+
+- `fp-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz`, contendo somente `fp`;
+- `SHA256SUMS`, no formato padrão de `sha256sum`.
+
+### Instalar um binário standalone
+
+Escolha uma versão **que tenha os artefatos publicados** na página de releases.
+Os comandos abaixo usam Bash; ajuste `version` para essa versão. A tag `v0.1.0`
+anterior ao workflow não recebe binários retroativamente.
+
+```bash
+version=0.2.0 # exemplo: confirme a versão publicada antes de baixar
+archive="fp-v$version-x86_64-unknown-linux-gnu.tar.gz"
+base="https://github.com/brasga-a/fp/releases/download/v$version"
+tmp=$(mktemp -d)
+curl --fail --location --proto '=https' --proto-redir '=https' "$base/$archive" -o "$tmp/$archive"
+curl --fail --location --proto '=https' --proto-redir '=https' "$base/SHA256SUMS" -o "$tmp/SHA256SUMS"
+(cd "$tmp" && sha256sum --check SHA256SUMS) &&
+  tar -xzf "$tmp/$archive" -C "$tmp" fp &&
+  "$tmp/fp" --version
+```
+
+Continue **somente se a verificação e a execução tiverem sucesso**. Se já houver
+`~/.local/bin/fp`, confira seu método de instalação antes de substituir. Não copie
+sobre um symlink nem use estes passos para sobrescrever uma instalação Cargo ou
+de um gerenciador de pacotes. Para uma instalação nova:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+# Recusa um arquivo ou symlink já existente.
+if [ ! -e "$HOME/.local/bin/fp" ] && [ ! -L "$HOME/.local/bin/fp" ]; then
+  install -m 755 "$tmp/fp" "$HOME/.local/bin/fp" &&
+    printf 'fp-standalone: https://github.com/brasga-a/fp\n' > "$HOME/.local/bin/.fp-standalone"
+fi
+"$HOME/.local/bin/fp" --version
+rm -r -- "$tmp"
+```
+
+O arquivo `.fp-standalone` é a declaração explícita da origem da instalação.
+Crie-o somente ao instalar um binário verificado das releases oficiais. O FP
+não converte instalações existentes em standalone automaticamente.
+
+`~/.local/bin` pode não estar no PATH. Você pode usar o caminho completo ou
+adicionar `export PATH="$HOME/.local/bin:$PATH"` à configuração do Bash.
+No Fish, use `fish_add_path ~/.local/bin`. Verifique `command -v fp` e
+`fp --version` para confirmar qual instalação está sendo executada.
+
+### Consultar e instalar atualizações
+
+```sh
+fp --version
+fp update --check
+fp update
+```
+
+`--check` consulta somente os metadados da última release estável pela API do
+GitHub: não baixa artefatos, não grava arquivos e não pede confirmação. Funciona
+fora de `~/fiap` e em instalações Cargo ou do sistema. Retorna 0 tanto quando há
+uma nova versão quanto quando a versão instalada já é igual ou superior; erros
+retornam 2. Não requer um token pessoal. Sem conexão, sem release ou com limite
+da API atingido, apresenta erro e permite tentar novamente mais tarde.
+
+`fp update` compara versões SemVer e nunca instala uma versão inferior. A API
+`releases/latest` do GitHub exclui drafts e prereleases; o FP também rejeita
+versões com sufixos de prerelease/build. Seleciona o nome exato do arquivo para
+seu target, mostra as versões e solicita confirmação em terminal, com Não como
+padrão. Recusar retorna 0; Esc/Ctrl+C retornam 130. Não há opção de confirmação
+automática nem canal beta/nightly.
+
+A substituição direta só é permitida no caminho real `~/.local/bin/fp`, com o
+marcador acima, arquivos pertencentes ao usuário, permissões adequadas e sem
+symlinks nos caminhos ou hardlinks no binário. Metadados Cargo no prefixo e
+`CARGO_HOME` também bloqueiam a substituição. Binários manuais em outros locais
+ou de origem incerta devem ser atualizados pelo método original. Um gerenciador
+que instale nesse prefixo deve remover o marcador standalone ao assumir o arquivo;
+nenhuma heurística consegue reconhecer todos os gerenciadores possíveis.
+
+Para Cargo, repita `cargo install --path . --force --locked` no checkout atualizado,
+ou `cargo install --git https://github.com/brasga-a/fp.git --tag vX.Y.Z --force --locked`.
+Para pacotes do sistema, use o gerenciador original. O FP não chama sudo, não
+muda permissões de diretórios protegidos e não altera Justfile nem `~/fiap`.
+
+O download usa HTTPS no repositório fixo oficial. `self_update` baixa para staging
+num diretório temporário, exige o checksum publicado em `SHA256SUMS`, verifica a
+integridade antes de extrair e também verifica o digest do asset fornecido pelo
+GitHub, quando disponível. O FP valida ELF64 x86_64 e a saída `--version` do
+binário extraído. A biblioteca copia o novo executável para um temporário ao lado
+da instalação e o publica por rename, preservando permissões. Falhas anteriores
+ao rename mantêm o executável anterior; não há backup permanente após sucesso.
+Há necessidade de espaço para o download e as cópias temporárias.
+
+SHA-256 detecta corrupção, mas **não comprova autoria**: quem controlar a release
+pode trocar o binário e o checksum juntos. A confiança depende do repositório e
+do HTTPS do GitHub. Não há assinatura independente nesta etapa. Downloads
+interrompidos ou checksums ausentes/divergentes não são instalados.
+
+### Publicar uma nova versão
+
+A única fonte da versão é `package.version` em `Cargo.toml`; Clap incorpora essa
+versão no build. Não existe incremento automático. Edite a versão, atualize o
+`Cargo.lock` com `cargo check` e prepare a seção correspondente do CHANGELOG.
+Execute as validações de [CONTRIBUTING.md](CONTRIBUTING.md), revise e faça commit.
+
+A tag `v0.1.0` já existe e não deve ser movida. Para a primeira release com esta
+automação, prepare uma versão nova — por exemplo `0.2.0` — e, **após commitar o
+workflow e a versão correspondente**, publique a tag:
+
+```sh
+# Apenas depois de preparar Cargo.toml/Cargo.lock/CHANGELOG para 0.2.0:
+python3 tools/check_release.py v0.2.0
+cargo build --release --locked
+./target/release/fp --version
+git tag -a v0.2.0 -m "FP 0.2.0"
+git push --atomic origin main v0.2.0
+```
+
+O [workflow de release](.github/workflows/release.yml) rejeita tags que não sejam
+`vX.Y.Z` ou que discordem do Cargo. Instala Rust stable e Just para os testes
+existentes, roda fmt/Clippy/testes, compila release, confere `--version`, empacota
+apenas `fp` e gera SHA-256. Somente após tudo passar, outro job publica usando
+`GITHUB_TOKEN`, com `contents: write` restrito à publicação. As actions são
+fixadas por hash de commit. Não exige servidores, domínios, PATs, crates.io ou
+ferramentas locais além das já usadas no desenvolvimento.
+
+A publicação começa em rascunho e só fica pública depois dos uploads. O workflow
+não sobrescreve releases existentes nem cria/envia tags. Se uma publicação
+falhar deixando rascunho, inspecione-o no GitHub antes de concluir ou removê-lo
+manualmente e reexecutar. Nunca mova uma tag publicada para corrigir binários;
+prepare outra versão. Não reutilize um número de versão já lançado.
+
+Para testar sem rede nem instalações reais:
+
+```sh
+cargo test --locked update::tests
+python3 tools/test_release.py
+python3 tools/check_release.py v0.1.0 # ajuste se a versão mudar
+```
+
+Os testes usam HTTP injetado e fixtures, inclusive checksum ausente/inválido,
+download truncado, rede indisponível, cancelamento, instalações protegidas e
+falha de substituição. A fixture de sucesso é um ELF mínimo, com fonte em `tests/fixtures/update/stub.S`,
+que imprime uma versão simulada e encerra. O teste percorre checksum, extração,
+validação de formato/versão e instalação somente em diretório temporário.
+Uma segunda fixture, em formato de script, testa a rejeição de binário inválido.
+A biblioteca foi consultada na [documentação de self_update](https://docs.rs/self_update/1.3.3/self_update/).
+Dependências diretas novas: `self_update` (cliente síncrono ureq, rustls, GitHub,
+tar/gzip e checksums) e `semver`. Não há runtime assíncrono no build do FP.

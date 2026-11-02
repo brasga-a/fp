@@ -17,6 +17,12 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Verifica e instala uma release estável do FP
+    Update {
+        /// Consulta a versão disponível sem baixar ou modificar arquivos
+        #[arg(long)]
+        check: bool,
+    },
     /// Prepara o workspace acadêmico e diagnostica ferramentas no PATH
     Init {
         /// Verifica sem criar ou modificar arquivos

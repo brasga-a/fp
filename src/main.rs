@@ -2,7 +2,7 @@ use clap::Parser;
 use fiap_projects::{
     Result,
     cli::{Cli, Commands},
-    delete, processes, root, tui, workspace,
+    delete, processes, root, tui, update, workspace,
 };
 
 fn main() {
@@ -24,6 +24,9 @@ fn run() -> Result<i32> {
     let raw: Vec<_> = std::env::args_os().collect();
     let mut cli = Cli::parse_from(&raw);
     cli.preserve_run_separator(&raw);
+    if let Commands::Update { check } = &cli.command {
+        return update::run(*check);
+    }
     // Bancos são independentes da raiz acadêmica e funcionam fora dela.
     if let Commands::Db { args } = &cli.command {
         return processes::run_db(&processes::find_db()?, args);
@@ -42,6 +45,7 @@ fn run() -> Result<i32> {
         std::env::var_os("HOME").as_deref(),
     )?;
     match cli.command {
+        Commands::Update { .. } => unreachable!("update é independente da raiz acadêmica"),
         Commands::Init { .. } => unreachable!("init é tratado antes da validação da raiz"),
         Commands::Create => tui::run(&root)?,
         Commands::Delete => delete::run(&root)?,

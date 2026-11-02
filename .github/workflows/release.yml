@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  TARGET: x86_64-unknown-linux-gnu
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Preparar Rust stable
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustup default stable
+          rustup target add "$TARGET"
+      - name: Validar versão da tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 tools/test_release.py
+          python3 tools/check_release.py "$TAG"
+      - name: Preparar Just para os testes existentes
+        run: cargo install just --locked
+      - name: Validar
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
+      - name: Compilar e empacotar
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          cargo build --release --locked --target "$TARGET"
+          test "$(target/$TARGET/release/fp --version)" = "fp ${TAG#v}"
+          mkdir dist
+          tar -czf "dist/fp-$TAG-$TARGET.tar.gz" -C "target/$TARGET/release" fp
+          cd dist
+          sha256sum "fp-$TAG-$TARGET.tar.gz" > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release
+          path: dist
+      - name: Publicar release validada
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cd dist
+          sha256sum --check SHA256SUMS
+          # create rejeita releases existentes; nunca use --clobber.
+          # O rascunho só se torna público depois de todos os uploads concluírem.
+          gh release create "$TAG" "fp-$TAG-$TARGET.tar.gz" SHA256SUMS \
+            --verify-tag --draft --title "FP $TAG" --generate-notes
+          gh release edit "$TAG" --draft=false

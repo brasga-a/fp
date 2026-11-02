@@ -200,3 +200,57 @@ Passaram cargo fmt --check, Clippy com -D warnings, 64 testes Cargo, os 11 teste
 Python do dispatcher gerado, 13 cenários PTY de create, 5 de delete e build release.
 Versão conferida: fp 0.1.0. Binário: 1.612.544 bytes.
 O histórico remoto inicial e a licença com autoria original foram preservados.
+
+## GitHub Releases e self-update — 2026-11-02
+
+Repositório confirmado pelo remote: `https://github.com/brasga-a/fp`.
+Versão preservada: `0.1.0`. A tag `v0.1.0` já existia; não foi alterada.
+Não existiam workflows antes desta implementação.
+
+Validações concluídas:
+
+- `cargo fmt --check`.
+- `cargo clippy --all-targets --locked -- -D warnings`.
+- `cargo test --locked`: 76 testes Cargo, incluindo 12 testes de atualização;
+  o teste do dispatcher gerado também executou seus 11 testes Python.
+- `cargo build --release --locked`.
+- `./target/release/fp --version`: `fp 0.1.0`.
+- `./target/release/fp update --help`: flag `--check` disponível.
+- `python3 tools/check_tui.py target/release/fp`: 13 cenários PTY.
+- `python3 tools/check_delete_tui.py target/release/fp`: 5 cenários PTY.
+- `python3 tools/test_release.py`: 3 testes, incluindo tags incompatíveis,
+  prereleases, zeros à esquerda e formato inválido.
+- Validador real aceitou `v0.1.0` e rejeitou `v9.9.9`, sem criar tags.
+- `actionlint` 1.7.12: workflow aprovado. Ferramenta baixada somente em `/tmp`.
+- Simulação local do empacotamento: tar contendo somente `fp`, SHA-256 correto,
+  permissões executáveis e versão do binário extraído conferida.
+- `cargo tree --locked -i tokio`: nenhuma dependência ativa de Tokio.
+- `git diff --check`: sem problemas.
+
+Os testes de atualização injetam o transporte HTTP, sem servidor ou rede.
+Cobrem comparação SemVer, seleção exata de target/origem, ausência de artefato,
+checksum ausente/inválido, download truncado/falho, rede, rate limit, ausência de
+release, instalação Cargo/sistema/incerta, falta de escrita, symlink/hardlink,
+cancelamento, alteração concorrente, binário inválido e falha com restauração.
+A fixture ELF tem fonte auditável e percorre o caminho real de verificação e
+instalação da biblioteca, com destino temporário. Nenhum teste substitui o FP
+instalado nem seu próprio executável.
+
+Hashes mantidos durante a validação final:
+
+- `~/.local/bin/fp`: `81f94d13feb7b7fe9aff9d42d4b43b841c61d66cf0f08537d53debf4cc85bb4e`.
+- `~/.cargo/bin/fp`: `5368c0ae6983c25c12e03370ab37887802b4a2ffa7dfd6e7718c69b015ad152b`.
+- `~/fiap/Justfile`: `ca2465a1b34e3ba94d1b5a8e7e87960ff6544033ddffe9b9192db3791d502058`.
+
+Não foram executados comandos de escrita em `~/fiap`, alterados templates ou
+Justfiles, instalados novos binários FP, criados commits/tags, enviados pushes
+ou publicadas releases. O workflow foi validado localmente, sem execução remota
+nem teste de publicação real. A compatibilidade GNU/glibc 2.35 será produzida
+pelo runner Ubuntu 22.04 configurado no workflow; o build local usa o sistema
+atual e não comprova a execução em todas as distribuições.
+
+Limitações documentadas: atualização direta somente de instalações reconhecidas
+em `~/.local/bin/fp` com marcador standalone; Cargo e pacotes usam o método
+original. SHA-256 protege integridade, sem assinatura independente de autoria.
+A publicação inicial com esta automação exige preparar uma nova versão e tag
+(por exemplo, `0.2.0`), conforme README/CONTRIBUTING.
