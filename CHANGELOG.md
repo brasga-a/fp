@@ -5,7 +5,11 @@ As mudanças do FP seguem a política de versionamento semântico descrita em
 
 ## [Unreleased]
 
-Sem alterações pendentes.
+### Corrigido
+
+- Workflow seleciona Python 3.11 para os testes acadêmicos no Ubuntu 22.04.
+- Publicação pode ser retomada manualmente para uma tag existente, sempre
+  compilando o conteúdo dessa tag, sem mover tags ou sobrescrever releases.
 
 ## 0.3.0 — 2026-11-02
 

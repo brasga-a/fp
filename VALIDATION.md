@@ -395,3 +395,9 @@ recusado por ETXTBSY, de forma limitada, e a preservar a causa dos demais erros.
 Comandos que já iniciaram não são repetidos. O conjunto de testes de bancos
 passou em 20 execuções consecutivas; depois passaram novamente os 92 testes do
 workspace, fmt, Clippy, build release e validadores de tag/workflow.
+
+
+Na primeira execução remota da release v0.3.0, os testes acadêmicos detectaram
+Python 3.10 no runner Ubuntu 22.04 (tomllib ausente). O workflow foi corrigido em
+main para selecionar Python 3.11 explicitamente e permitir retomada manual com
+checkout da tag existente. A tag v0.3.0 e seu código foram preservados.

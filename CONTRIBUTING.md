@@ -136,3 +136,10 @@ Ao atualizar pacotes rootless, revise a origem e fixe os novos hashes em
 arbitrária. Credenciais locais são privadas, não criptografadas: não as inclua
 em fixtures, snapshots, commits ou logs. Apenas novas instâncias podem receber
 segredos automáticos; adoções preservam as credenciais e o daemon existentes.
+
+
+Para retomar uma publicação após corrigir apenas o workflow, abra Actions →
+Release → Run workflow na branch main e informe a tag já existente. A execução
+manual faz checkout de `refs/tags/TAG`, valida Cargo e compila o código exato da
+tag. Não mova tags para corrigir infraestrutura de CI. Python 3.11 é selecionado
+explicitamente no runner Ubuntu 22.04, cujo Python de sistema é 3.10.
