@@ -11,7 +11,18 @@ As mudanças do FP seguem a política de versionamento semântico descrita em
   testes, empacotamento e SHA-256 antes da publicação.
 - `fp update` com confirmação, checksum obrigatório e substituição segura de
   instalações standalone reconhecidas; `fp update --check` somente consulta.
+- Seleção exata do artefato por target e validação do formato ELF e da versão
+  do binário antes da instalação; rejeição de downloads incompletos e de
+  alterações concorrentes na instalação.
+- Proteção de instalações Cargo, do sistema ou de origem incerta, com
+  atualização direta restrita a instalações standalone declaradas.
+- Testes de atualização sem rede, com fixtures e HTTP simulado para falhas de
+  download, checksum, permissões, cancelamento e substituição.
 - Guia de instalação standalone, integridade e publicação pelo GitHub Actions.
+- Rotina no `AGENTS.md` para atualizar este histórico e a versão do CLI em cada
+  entrega funcional, mantendo `Cargo.toml`, `Cargo.lock` e changelog consistentes.
+  Atualizações locais via Cargo dispensam tags e builds no GitHub Actions;
+  mudanças somente de documentação não incrementam a versão do executável.
 
 ## [0.1.0] — 2026-11-01
 
