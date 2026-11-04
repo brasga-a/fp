@@ -84,6 +84,20 @@ normais/verbatim e destinos Unicode inexistentes. A suíte permanece ativa; o
 CI usa --no-fail-fast para coletar resultados de todos os crates numa execução.
 Os testes e artefatos Windows continuam pendentes da execução desse ajuste.
 
+### Segunda execução nativa no Actions
+
+Na execução [41904159864](https://github.com/brasga-a/fp/actions/runs/41904159864),
+commit `107829f`, a correção de prefixos passou e todas as suítes foram executadas.
+SQLite (inclusive exclusão/identidade/hardlinks), DPAPI, JSON não interativo,
+inicializadores simulados e atualização recusada passaram nativamente no Windows.
+Restaram duas falhas de teste: a busca implícita do Windows selecionou o Docker
+CLI do sistema antes do mock no PATH (a tentativa falhou em info, sem criar
+recursos); e o Python comparou o alias curto RUNNER~1 com o mesmo diretório em
+forma longa. O ajuste resolve o executável explicitamente pelo PATH, recusa sua
+ausência sem buscar fora dele, e normaliza o diretório da fixture Python. Os
+testes permanecem ativos e incluem a ausência do Docker no PATH. O resultado
+final Windows e seus artefatos ainda dependem da próxima execução.
+
 ## Implementação e limites
 
 | Domínio | API/diferença tratada |

@@ -281,6 +281,10 @@ fn native_docker_mock_preserves_volumes_and_keeps_secrets_out_of_arguments() {
 fn windows_docker_uses_user_context_and_rejects_persisted_unix_endpoint() {
     let dir = tempfile::tempdir().unwrap();
     let docker = tool(dir.path(), "docker");
+    let context = format!(
+        "fp-test-{}",
+        dir.path().file_name().unwrap().to_string_lossy()
+    );
     let path = std::env::join_paths(std::iter::once(dir.path().to_path_buf()).chain(
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
     ))
@@ -296,7 +300,7 @@ fn windows_docker_uses_user_context_and_rejects_persisted_unix_endpoint() {
             .arg(dir.path().join("s"))
             .args(["--no-input", "--output", "json"])
             .args(args)
-            .env("DOCKER_CONTEXT", "user-desktop")
+            .env("DOCKER_CONTEXT", &context)
             .env("PATH", &path)
             .output()
             .unwrap()
@@ -311,7 +315,7 @@ fn windows_docker_uses_user_context_and_rejects_persisted_unix_endpoint() {
     assert!(
         fs::read_to_string(docker.with_extension("calls"))
             .unwrap()
-            .contains("context=user-desktop")
+            .contains(&format!("context={context}"))
     );
     let registry = dir.path().join("c/databases.json");
     let mut records: serde_json::Value =
@@ -322,6 +326,18 @@ fn windows_docker_uses_user_context_and_rejects_persisted_unix_endpoint() {
     let out = call(&["run", "--name", "fixture"]);
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("unix://"));
+    assert_eq!(fs::read(docker.with_extension("calls")).unwrap(), before);
+
+    let absent = Command::new(env!("CARGO_BIN_EXE_fp"))
+        .args(["db", "list", "--discover", "--no-input", "--output", "json"])
+        .env("APPDATA", dir.path().join("roaming"))
+        .env("LOCALAPPDATA", dir.path().join("local"))
+        .env("PATH", dir.path().join("empty-bin"))
+        .env("DOCKER_CONTEXT", &context)
+        .output()
+        .unwrap();
+    assert!(!absent.status.success());
+    assert!(String::from_utf8_lossy(&absent.stderr).contains("E_TOOL"));
     assert_eq!(fs::read(docker.with_extension("calls")).unwrap(), before);
 }
 

@@ -14,12 +14,6 @@ impl Manager {
         input: Option<&[u8]>,
         env: &[(String, String)],
     ) -> Result<String> {
-        let mut cmd = Command::new(tool);
-        cmd.args(args)
-            .envs(env.iter().cloned())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
         #[cfg(windows)]
         if self
             .docker_host
@@ -28,6 +22,16 @@ impl Manager {
         {
             return Err("E_PLATFORM: endpoint Docker unix:// de Linux incompatível com Windows; utilize Docker Desktop e um registro próprio, sem migrar volumes automaticamente".into());
         }
+        #[cfg(windows)]
+        let program = program_in_path(tool)?;
+        #[cfg(unix)]
+        let program = tool;
+        let mut cmd = Command::new(program);
+        cmd.args(args)
+            .envs(env.iter().cloned())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
         if tool
             .file_name()
             .is_some_and(|n| n == "docker" || n == "docker.exe")
@@ -113,4 +117,29 @@ impl Manager {
             thread::sleep(Duration::from_millis(20));
         }
     }
+}
+
+#[cfg(windows)]
+fn program_in_path(tool: &Path) -> Result<std::path::PathBuf> {
+    // Command no Windows também pesquisa diretórios do sistema antes do PATH.
+    // Resolva o executável explicitamente para respeitar a escolha do usuário
+    // e o isolamento dos executáveis simulados nos testes.
+    if tool.is_absolute() || tool.components().count() > 1 {
+        return Ok(std::path::absolute(tool)?);
+    }
+    let name = if tool.extension().is_some() {
+        tool.to_path_buf()
+    } else {
+        tool.with_extension("exe")
+    };
+    let found = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join(&name))
+        .find(|path| path.is_file())
+        .ok_or_else(|| {
+            format!(
+                "E_TOOL: {} ausente no PATH; configure o Docker CLI para continuar",
+                tool.display()
+            )
+        })?;
+    Ok(std::path::absolute(found)?)
 }

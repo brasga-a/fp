@@ -33,6 +33,9 @@ As mudanças do FP seguem a política de versionamento semântico descrita em
 
 ### Corrigido
 
+- Docker CLI Windows é resolvido explicitamente pelo PATH, impedindo precedência
+  inesperada do executável de sistema sobre a escolha do usuário e os mocks.
+- Fixtures Python normalizam nomes curtos do perfil Windows antes de conferir cwd.
 - Resolução de caminhos Windows aguarda a raiz completa antes de consultar
   prefixos de unidade/verbatim, evitando o erro nativo "Incorrect function".
 - Publicação de projetos entre filesystems usa criação exclusiva e rollback por
