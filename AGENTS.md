@@ -125,7 +125,8 @@
 
 - Keep one Cargo workspace with exactly four functional crates and one final
   executable: fp on Linux, fp.exe on Windows x86_64 MSVC. Version 0.6.0 introduces
-  the Windows implementation; native Windows validation is still required.
+  the Windows implementation, validated in native CI. Keep native Windows CI
+  mandatory for platform changes and report outstanding manual validations.
 - Prefer standard cross-platform APIs. Use cfg attributes around real platform
   differences: target_os = "linux" for rootless/systemd, windows for Win32/DPAPI,
   unix only for shared Unix APIs. Do not use cfg! to hide invalid code.

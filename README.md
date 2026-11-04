@@ -7,7 +7,7 @@ ecossistemas e a execução ao Just.
 
 ## Requisitos e instalação
 
-- Linux x86_64 GNU validado; Windows x86_64 MSVC implementado, com validação nativa pendente.
+- Linux x86_64 GNU e Windows x86_64 MSVC validados nativamente no CI.
 - Rust stable recente com Cargo para compilar (edição 2024; validado em 1.99.1).
 - Just 1.39+ para `fp run` e para o teste de integração com Just real.
 - Terminal interativo para `fp create`; mouse não é necessário.
@@ -29,14 +29,14 @@ do repositório continuam exigindo suas ferramentas**: o dispatcher existente de
 `~/fiap`, por exemplo, usa Python 3.14+ e Just. Não é uma dependência do FP para
 listar ou criar pastas.
 
-## Windows nativo (validação nativa pendente)
+## Windows nativo
 
 O mesmo workspace mantém os quatro crates e tem como alvo
-`x86_64-pc-windows-msvc`. Esta implementação ainda não declara suporte Windows
-completo: consulte [VALIDATION.md](VALIDATION.md) para distinguir checagem de
-compilação e testes efetivamente executados. O CI contém runners Ubuntu e
-Windows nativos e não publica releases em pushes comuns, PRs ou execução manual
-do CI.
+`x86_64-pc-windows-msvc`. A CLI foi compilada e testada nativamente nos runners
+Ubuntu e Windows: [resultado do CI](https://github.com/brasga-a/fp/actions/runs/41905578640). Consulte
+[VALIDATION.md](VALIDATION.md) para a cobertura e as limitações: TUI em console
+Windows e integrações com ferramentas reais/Docker Desktop ainda exigem testes
+manuais. O CI não publica releases em pushes comuns, PRs ou execução manual.
 
 Para compilar no Windows 10/11 x64, instale Rust stable MSVC e Visual Studio
 Build Tools com a carga C++ e Windows SDK, necessária ao SQLite embarcado.
@@ -78,7 +78,7 @@ fp db create --engine sqlite --name estudos --no-input --output json
 fp db list --no-input --output json
 ```
 
-| Funcionalidade | Linux x86_64 GNU | Windows x86_64 MSVC (implementada, pendente de teste nativo) |
+| Funcionalidade | Linux x86_64 GNU | Windows x86_64 MSVC (validado no CI) |
 | --- | --- | --- |
 | Workspace, criação/exclusão, listagem e Just | Disponível | Disponível com ferramentas nativas |
 | SQLite embarcado e comandos JSON sem TTY | Disponível | Disponível, sem Docker |

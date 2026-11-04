@@ -11,7 +11,8 @@ As mudanças do FP seguem a política de versionamento semântico descrita em
 
 - Implementação nativa Windows x86_64 MSVC nos quatro crates, com descoberta de
   executáveis/PATHEXT, diretório pessoal do perfil e configuração em AppData.
-  Suporte completo permanece condicionado à validação nativa Windows.
+  Compilação, testes e empacotamento validados nativamente no Ubuntu/Windows;
+  testes manuais de TUI Windows e integrações reais continuam documentados.
 - Identidade SQLite Windows por volume/ID de 128 bits, preservando registros Unix,
   e credenciais por DPAPI do usuário com aleatoriedade criptográfica do sistema.
 - CI nativo Ubuntu/Windows com fmt, check, Clippy, testes, build release e pacotes

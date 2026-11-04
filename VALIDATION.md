@@ -1,9 +1,33 @@
 # Validação — 2026-11-04 (FP 0.6.0)
 
-Implementação Windows x86_64 MSVC adicionada aos quatro crates. **A validação
-nativa Windows ainda está pendente; esta entrega não declara suporte completo.**
-A validação local inicial ocorreu antes da autorização de commit/push.
+Implementação Windows x86_64 MSVC adicionada aos quatro crates e **validada
+nativamente no Ubuntu e Windows** na [execução 41905578640](https://github.com/brasga-a/fp/actions/runs/41905578640),
+commit `aaf5501`. O usuário autorizou os commits e pushes para concluir o CI.
 Nenhuma tag, release ou instalação global foi realizada.
+
+| Validação nativa no Actions | Ubuntu x86_64 GNU | Windows x86_64 MSVC |
+| --- | --- | --- |
+| Cargo fmt / check / Clippy com -D warnings | Passaram | Passaram |
+| Cargo test --workspace --locked --no-fail-fast --target TARGET | 109 testes Rust passaram | 76 testes Rust passaram |
+| Dispatcher Python / Just | 11 testes passaram, 1 batch Windows não aplicável | 11 testes passaram, 1 sinal POSIX não aplicável |
+| Testes de empacotamento/versão Python | 5 passaram | 5 passaram |
+| Cargo build --release --locked --target TARGET | Passou | Passou |
+| Binário --help / --version | Passaram, fp 0.6.0 | Passaram, fp 0.6.0 |
+| Pacote com SHA-256 e upload de artefato | tar.gz com fp | ZIP com fp.exe |
+
+O Windows executou SQLite, exclusão por identidade/hardlinks, DPAPI, comandos
+JSON sem TTY, caminhos com unidade/Unicode/espaços, inicializadores Rust simulados,
+Just/Python, batch seguro, contexto Docker simulado e falhas Linux-only explícitas.
+A consulta de atualização foi testada com respostas HTTP simuladas; o acesso real
+às releases foi verificado no Linux. TUI em console Windows, inicializadores de
+ecossistemas reais e Docker Desktop real continuam como validações manuais.
+
+Artefatos nativos do CI:
+
+- [Linux tar.gz + checksum](https://github.com/brasga-a/fp/actions/runs/41905578640/artifacts/13359464140).
+- [Windows ZIP + checksum](https://github.com/brasga-a/fp/actions/runs/41905578640/artifacts/13359828848).
+
+Os artefatos são de CI, com retenção de 7 dias; não são GitHub Releases.
 
 ## Linux nativo
 
@@ -32,7 +56,7 @@ coberto por SetupHost simulado. Testes de sinais, permissões POSIX e ELF ficam
 condicionados à plataforma correspondente; parsing, criação, rollback, SQLite,
 persistência e JSON continuam compartilhados.
 
-## Windows: compilação versus execução
+## Windows: etapa local e compilação cruzada anterior ao CI
 
 O sistema local não tem Windows, rustup ou runner remoto com estas alterações.
 A tentativa inicial de `cargo check --workspace --locked --target
@@ -55,9 +79,10 @@ Com Rust oficial 1.99.1, cargo-xwin 0.23.1 e SDK/CRT MSVC temporários:
 O executável foi copiado para `target/x86_64-pc-windows-msvc/release/fp.exe`.
 O ZIP local `dist/fp-v0.6.0-x86_64-pc-windows-msvc.zip` foi montado a partir desse
 binário de compilação cruzada; contém somente `fp.exe`, com conteúdo conferido
-byte a byte e SHA-256 validado. **O empacotador Windows completo, que executa
---help/--version, ainda precisa rodar no runner Windows.** O pacote Linux real
-foi gerado pelo empacotador completo. `dist/SHA256SUMS` verifica ambos os pacotes.
+byte a byte e SHA-256 validado. Esse foi o artefato da etapa local anterior ao CI.
+O empacotador completo depois passou no runner Windows, inclusive --help/--version,
+e produziu o artefato nativo referenciado acima. Os pacotes nativos baixados do CI
+substituem os artefatos locais em dist; `dist/SHA256SUMS` verifica ambos.
 Os logs finais estão em `target/validation/` (check, Clippy, build e compilação
 dos testes Windows, testes/builds e PTYs Linux).
 
@@ -67,10 +92,10 @@ os runtimes apropriados do [Visual C++ Redistributable x64](https://learn.micros
 O FP não os instala automaticamente. A execução numa máquina limpa permanece
 parte da validação anterior à primeira release Windows.
 
-Os comandos `cargo test` Windows nativos, `fp.exe --help`, `fp.exe --version`,
-DPAPI real, comportamento de arquivos NTFS e terminal Windows **não foram
-executados**. A configuração de CI, os testes com respostas HTTP simuladas e a
-checagem cruzada não substituem esses resultados.
+A etapa local não executou os testes Windows. Eles foram executados posteriormente
+no runner nativo, conforme os resultados acima. A experiência da TUI num console
+Windows e integrações reais continuam pendentes; compilação cruzada não substitui
+testes de execução.
 
 ### Primeira execução nativa no Actions
 
@@ -82,7 +107,8 @@ consultar um prefixo Windows isolado antes de acrescentar RootDir. O ajuste
 preserva a normalização Unix e acrescenta regressão Windows para caminhos
 normais/verbatim e destinos Unicode inexistentes. A suíte permanece ativa; o
 CI usa --no-fail-fast para coletar resultados de todos os crates numa execução.
-Os testes e artefatos Windows continuam pendentes da execução desse ajuste.
+Os testes e artefatos ficaram pendentes naquela execução; os ajustes passaram
+na execução final referenciada no início deste relatório.
 
 ### Segunda execução nativa no Actions
 
@@ -96,7 +122,8 @@ recursos); e o Python comparou o alias curto RUNNER~1 com o mesmo diretório em
 forma longa. O ajuste resolve o executável explicitamente pelo PATH, recusa sua
 ausência sem buscar fora dele, e normaliza o diretório da fixture Python. Os
 testes permanecem ativos e incluem a ausência do Docker no PATH. O resultado
-final Windows e seus artefatos ainda dependem da próxima execução.
+final Windows e seus artefatos passaram na execução referenciada no início
+deste relatório.
 
 ## Implementação e limites
 
@@ -136,11 +163,9 @@ mantém recusa de releases existentes, publicação em rascunho e escrita soment
 no job de publicação. Artefatos: `fp-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` e
 `fp-vX.Y.Z-x86_64-pc-windows-msvc.zip` (com `fp.exe`).
 
-O Actions não foi executado durante a validação local inicial, quando estas
-alterações ainda estavam apenas no workspace e não havia autorização de commit/push.
-O usuário autorizou em seguida commitar e subir a revisão para executar o CI.
-Os resultados dos runners nativos devem ser registrados com o link da execução
-antes de declarar suporte Windows completo.
+A validação local inicial antecedeu a autorização de commit/push. Após a autorização,
+os commits `1edeb96`, `107829f` e `aaf5501` foram enviados para main, e o CI nativo
+confirmou o resultado final no link registrado no início deste relatório.
 Também falta validar a TUI num console Windows, os inicializadores opcionais
 reais e Docker Desktop em recursos descartáveis autorizados. Não há instalação
 automática Windows nesta versão.
