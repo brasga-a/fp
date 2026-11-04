@@ -9,7 +9,7 @@ AGENTS.md              orientações para agentes
 Justfile               interface de execução independente do FP
 chapters.toml          registro declarativo dos capítulos e comandos
 pyproject.toml         configuração Python da raiz (uv, sem pacote)
-scripts/chapters.py    dispatcher usado pelo Just (Python 3.11+)
+scripts/chapters.py    dispatcher usado pelo Just (Python 3.14+)
 tests/test_chapters.py  testes do dispatcher em diretórios temporários
 docs/README.md         organização dos materiais acadêmicos
 fase-NN/cap-NN/        projetos criados conforme necessário
@@ -39,7 +39,7 @@ just run 1 2 --task dev -- --host 127.0.0.1
 just check
 ```
 
-Just e Python 3.11+ são necessários para o dispatcher. uv, Vite+, Cargo e
+Just e Python 3.14+ são necessários para o dispatcher. uv, Vite+, Cargo e
 PlatformIO são necessários apenas para os projetos correspondentes. Zed é opcional.
 
 ## Registro de execução

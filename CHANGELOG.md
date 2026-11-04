@@ -5,6 +5,15 @@ As mudanças do FP seguem a política de versionamento semântico descrita em
 
 ## [Unreleased]
 
+## 0.5.0 — 2026-11-04
+
+### Alterado
+
+- Versão mínima do Python elevada de 3.11 para 3.14 no template acadêmico,
+  no diagnóstico de `fp init` e no ambiente de CI. Instalações com Python
+  anterior a 3.14 precisam ser atualizadas. Manifestos existentes mantêm
+  seus requisitos personalizados.
+
 ## 0.4.1 — 2026-11-04
 
 ### Corrigido

@@ -1,3 +1,24 @@
+# Validação — 2026-11-04 (FP 0.5.0)
+
+O template acadêmico e o diagnóstico de `fp init` exigem Python 3.14+.
+O workflow de release usa Python 3.14. O teste de integração confirma que
+um workspace novo passa `--python >=3.14` ao uv; o teste com manifesto
+personalizado continua usando seu requisito anterior sem sobrescrevê-lo.
+O diagnóstico rejeita Python 3.10 a 3.13 e aceita 3.14 e versões posteriores
+da série 3 nos testes com executáveis simulados.
+
+- `cargo fmt --all --check` e Clippy com `-D warnings`: passaram.
+- `cargo test --workspace --locked --offline`: 98 testes Rust e 11 testes
+  Python do dispatcher passaram.
+- `cargo build --release --locked --offline`: passou; `target/release/fp
+  --version` informou `fp 0.5.0`.
+- Verificações PTY: 13 cenários de criação, 5 de exclusão e 5 de bancos passaram.
+- `python3 tools/test_release.py`: 3 testes passaram; `check_release.py v0.5.0`
+  confirmou a versão.
+
+Validação local com Python 3.14.8, diretórios temporários e inicializadores
+simulados. A execução remota no GitHub Actions não foi realizada nesta etapa.
+
 # Validação — 2026-11-04 (FP 0.4.1)
 
 Reproduzido o diagnóstico `Import "numpy" could not be resolved` usando o

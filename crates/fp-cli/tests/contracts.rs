@@ -293,6 +293,27 @@ fn phase_and_folder_and_sql_do_not_invent_commands() {
     );
 }
 #[test]
+fn new_python_workspace_passes_minimum_version_to_uv() {
+    let dir = repo();
+    fiap_projects::workspace::initialize(dir.path()).unwrap();
+    let tools = tempdir().unwrap();
+    let uv = script(
+        tools.path(),
+        "uv",
+        "printf '%s\\n' \"$@\" > initializer-args\necho '[project]' > pyproject.toml\necho 'print(42)' > main.py",
+    );
+    let plan = plan(dir.path(), Technology::Python, Some(uv));
+    create(dir.path(), &plan, true).unwrap();
+    let args = fs::read_to_string(plan.target.join("initializer-args")).unwrap();
+    assert!(args.contains("--python\n>=3.14\n"));
+    let root = fs::read_to_string(dir.path().join("pyproject.toml"))
+        .unwrap()
+        .parse::<toml_edit::DocumentMut>()
+        .unwrap();
+    assert_eq!(root["project"]["requires-python"].as_str(), Some(">=3.14"));
+}
+
+#[test]
 fn python_app_respects_version_and_registers_main() {
     let dir = repo();
     let tools = tempdir().unwrap();

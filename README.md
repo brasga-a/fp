@@ -25,7 +25,7 @@ O FP não modifica o PATH nem configurações globais.
 
 O binário compilado funciona sem Rust, Python ou Node instalados. **Os comandos
 do repositório continuam exigindo suas ferramentas**: o dispatcher existente de
-`~/fiap`, por exemplo, usa Python 3.11+ e Just. Não é uma dependência do FP para
+`~/fiap`, por exemplo, usa Python 3.14+ e Just. Não é uma dependência do FP para
 listar ou criar pastas.
 
 ## Uso
@@ -95,7 +95,7 @@ capítulos inexistentes são reportados sem sobrescrever nem recriar projetos.
 O conteúdo de Justfiles personalizados e instruções existentes é preservado;
 o FP não migra receitas nem tenta corrigir configurações arbitrárias.
 
-O diagnóstico verifica Just e Python 3.11+ (necessários ao dispatcher) e indica
+O diagnóstico verifica Just e Python 3.14+ (necessários ao dispatcher) e indica
 uv, Vite+, Cargo, PlatformIO, Zed, db, Docker e SQLite como ferramentas opcionais.
 Procura executáveis no PATH e, quando ausentes, verifica diretórios comuns como
 `~/.local/bin`, `~/.cargo/bin`, `~/.local/share/vite-plus/bin`,

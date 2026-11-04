@@ -268,7 +268,7 @@ fn missing_required_tools_report_failure_after_creating_structure() {
     assert!(root.join("Justfile").is_file());
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(text.contains("[FALTA] Just"));
-    assert!(text.contains("[FALTA] Python 3.11+"));
+    assert!(text.contains("[FALTA] Python 3.14+"));
     assert!(text.contains("fish_add_path"));
 }
 #[test]
@@ -311,8 +311,11 @@ fn validates_required_python_version() {
     let dir = tempdir().unwrap();
     for (version, supported) in [
         ("Python 3.10.9", false),
-        ("Python 3.11.0", true),
+        ("Python 3.11.0", false),
+        ("Python 3.12.9", false),
+        ("Python 3.13.9", false),
         ("Python 3.14.0", true),
+        ("Python 3.15.0", true),
         ("invalid", false),
     ] {
         let python = script(dir.path(), "python", &format!("echo '{version}'"));

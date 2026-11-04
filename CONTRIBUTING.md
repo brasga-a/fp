@@ -6,7 +6,7 @@ Leia o [README](README.md) e as [instruções para agentes](AGENTS.md).
 
 ## Preparar o ambiente
 
-Use Rust stable recente, Cargo, rustfmt, Clippy, Just e Python 3.11+.
+Use Rust stable recente, Cargo, rustfmt, Clippy, Just e Python 3.14+.
 Python e Just são usados nos testes do dispatcher e nos testes de terminal;
 não são runtimes do executável FP. Ferramentas como uv, vp, PlatformIO e Zed
 são simuladas nos testes: não é necessário instalar todos os ecossistemas.
@@ -141,5 +141,5 @@ segredos automáticos; adoções preservam as credenciais e o daemon existentes.
 Para retomar uma publicação após corrigir apenas o workflow, abra Actions →
 Release → Run workflow na branch main e informe a tag já existente. A execução
 manual faz checkout de `refs/tags/TAG`, valida Cargo e compila o código exato da
-tag. Não mova tags para corrigir infraestrutura de CI. Python 3.11 é selecionado
+tag. Não mova tags para corrigir infraestrutura de CI. Python 3.14 é selecionado
 explicitamente no runner Ubuntu 22.04, cujo Python de sistema é 3.10.

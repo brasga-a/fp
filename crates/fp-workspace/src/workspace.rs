@@ -170,7 +170,7 @@ pub struct Tool {
 pub fn tools(path: &OsStr, home: Option<&OsStr>) -> Vec<Tool> {
     let specs: &[(&str, &[&str], bool)] = &[
         ("Just", &["just"], true),
-        ("Python 3.11+", &["python3"], true),
+        ("Python 3.14+", &["python3"], true),
         ("Python / uv", &["uv"], false),
         ("Vite+", &["vp"], false),
         ("Rust / Cargo", &["cargo"], false),
@@ -221,5 +221,5 @@ pub fn python_supported(python: &Path) -> bool {
         .strip_prefix("Python ")
         .unwrap_or("")
         .split('.');
-    matches!((parts.next().and_then(|s| s.parse::<u32>().ok()), parts.next().and_then(|s| s.parse::<u32>().ok())), (Some(3), Some(minor)) if minor >= 11)
+    matches!((parts.next().and_then(|s| s.parse::<u32>().ok()), parts.next().and_then(|s| s.parse::<u32>().ok())), (Some(3), Some(minor)) if minor >= 14)
 }

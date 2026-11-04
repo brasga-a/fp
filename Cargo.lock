@@ -556,7 +556,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "fiap-projects"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "clap",
  "cliclack",
@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "fp-database"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "flate2",
  "rusqlite",
@@ -639,7 +639,7 @@ dependencies = [
 
 [[package]]
 name = "fp-update"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "self_update",
  "semver",
@@ -649,7 +649,7 @@ dependencies = [
 
 [[package]]
 name = "fp-workspace"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "serde_json",
  "tempfile",

@@ -32,9 +32,9 @@ pub fn run(root: &Path, check: bool) -> Result<i32> {
         std::env::var_os("HOME").as_deref(),
     ) {
         if let Some(path) = &tool.executable {
-            if tool.label == "Python 3.11+" && !python_supported(path) {
+            if tool.label == "Python 3.14+" && !python_supported(path) {
                 eprintln!(
-                    "[ERRO] Python: versão incompatível ou não identificada em {} (necessário 3.11+)",
+                    "[ERRO] Python: versão incompatível ou não identificada em {} (necessário 3.14+)",
                     path.display()
                 );
                 required_missing = true;
