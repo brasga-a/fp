@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        default: ''
+      tag:
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  PYTHONUTF8: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - name: Preparar Rust stable
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustup default stable
+          rustup target add ${{ matrix.target }}
+      - name: Preparar Just
+        run: cargo install just --version 1.59.0 --locked
+      - name: Validar tag de release
+        if: inputs.tag != ''
+        env:
+          TAG: ${{ inputs.tag }}
+        run: python tools/check_release.py
+      - name: Verificar formatação
+        run: cargo fmt --all --check
+      - name: Verificar compilação nativa
+        run: cargo check --workspace --locked --target ${{ matrix.target }}
+      - name: Clippy
+        run: cargo clippy --workspace --locked --all-targets --target ${{ matrix.target }} -- -D warnings
+      - name: Testes nativos
+        run: cargo test --workspace --locked --target ${{ matrix.target }}
+      - name: Testes dos templates e da distribuição
+        run: |
+          python -m unittest discover -s assets/workspace/tests -v
+          python tools/test_release.py
+      - name: Compilar release nativa
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Validar terminal Linux
+        if: runner.os == 'Linux'
+        run: |
+          python tools/check_tui.py target/${{ matrix.target }}/release/fp
+          python tools/check_delete_tui.py target/${{ matrix.target }}/release/fp
+          python tools/check_database_tui.py target/${{ matrix.target }}/release/fp
+      - name: Verificar executável, empacotar e gerar SHA-256
+        run: python tools/package_release.py ${{ matrix.target }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7

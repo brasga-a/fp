@@ -3,14 +3,15 @@ use fiap_projects::{
     cli::{Cli, Commands},
     root, workspace,
 };
+#[cfg(unix)]
+use std::os::unix::fs::{PermissionsExt, symlink};
 use std::{
     collections::BTreeMap,
     fs,
-    os::unix::fs::{PermissionsExt, symlink},
     path::{Path, PathBuf},
     process::Command,
 };
-use tempfile::tempdir;
+use tempfile::TempDir;
 
 fn snapshot(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     let mut result = BTreeMap::new();
@@ -33,6 +34,7 @@ fn snapshot(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     }
     result
 }
+#[cfg(unix)]
 fn script(dir: &Path, name: &str, body: &str) -> PathBuf {
     let path = dir.join(name);
     fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
@@ -92,6 +94,7 @@ fn root_location_supports_nonexistent_home_root_and_precedence() {
     assert!(root::resolve(Some(&expected), None, None).is_err());
 }
 #[test]
+#[cfg(unix)]
 fn root_location_respects_existing_symlink_before_parent_component() {
     let dir = tempdir().unwrap();
     fs::create_dir_all(dir.path().join("real/sub")).unwrap();
@@ -174,6 +177,7 @@ fn path_conflicts_block_all_writes() {
     assert_eq!(snapshot(dir.path()), before);
 }
 #[test]
+#[cfg(unix)]
 fn symlinked_managed_paths_are_preserved_without_outside_writes() {
     let dir = tempdir().unwrap();
     let outside = tempdir().unwrap();
@@ -237,7 +241,7 @@ fn cli_uses_default_home_and_env_root_without_requiring_existing_structure() {
             .path()
             .join(if use_env { "custom-root" } else { "fiap" });
         let mut cmd = bin();
-        cmd.env("HOME", dir.path());
+        cmd.env("HOME", dir.path()).env("USERPROFILE", dir.path());
         if use_env {
             cmd.env("FP_ROOT", &root);
         }
@@ -269,9 +273,10 @@ fn missing_required_tools_report_failure_after_creating_structure() {
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(text.contains("[FALTA] Just"));
     assert!(text.contains("[FALTA] Python 3.14+"));
-    assert!(text.contains("fish_add_path"));
+    assert!(text.contains("Instale a ferramenta"));
 }
 #[test]
+#[cfg(unix)]
 fn finds_tools_outside_path_and_accepts_platformio_alias() {
     let dir = tempdir().unwrap();
     let bin = dir.path().join(".local/bin");
@@ -307,6 +312,7 @@ fn finds_tools_outside_path_and_accepts_platformio_alias() {
     );
 }
 #[test]
+#[cfg(unix)]
 fn validates_required_python_version() {
     let dir = tempdir().unwrap();
     for (version, supported) in [
@@ -346,11 +352,21 @@ fn generated_dispatcher_runs_without_fp_installed() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("Nenhum capítulo"));
-    let status = Command::new("python3")
+    let python = workspace::tools(&std::env::var_os("PATH").unwrap_or_default(), None)
+        .into_iter()
+        .find(|t| t.label == "Python 3.14+")
+        .unwrap()
+        .executable
+        .unwrap();
+    let status = Command::new(python)
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .current_dir(dir.path())
         .args(["-m", "unittest", "discover", "-s", "tests", "-q"])
         .status()
         .unwrap();
     assert!(status.success());
+}
+
+fn tempdir() -> std::io::Result<TempDir> {
+    tempfile::tempdir_in(std::env::temp_dir().canonicalize()?)
 }

@@ -63,3 +63,14 @@ and experimentation environment, not a commercial product.
   automatically.
 - Preserve authorship and academic integrity. Never fabricate experiment results,
   executions or tests.
+
+## Portability
+
+- Just uses Python directly as its recipe interpreter: python3 on Linux, python
+  on Windows, Python 3.14+ and Just 1.39+ on PATH. Do not add Bash/WSL requirements
+  to the management dispatcher. Project commands may remain platform-specific.
+- Keep user arguments as argv, never interpolate them into shell source. Windows
+  batch arguments that cannot preserve literal semantics must fail explicitly.
+- Keep the Unix execvp signal contract and Windows subprocess exit-code contract.
+  Test with temporary directories and simulated executables; do not run projects,
+  access hardware or start real databases as part of dispatcher validation.

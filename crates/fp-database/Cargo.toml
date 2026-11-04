@@ -9,9 +9,14 @@ repository.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+getrandom = "0.4.3"
 rusqlite = { version = "0.41.1", features = ["bundled", "hooks"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
 self_update.workspace = true
 sha2.workspace = true
 tar.workspace = true
 flate2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem", "Win32_Foundation", "Win32_Security_Cryptography"] }

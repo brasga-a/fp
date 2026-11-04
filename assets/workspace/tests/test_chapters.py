@@ -1,6 +1,7 @@
 """Integração do contrato de execução, usando apenas projetos temporários."""
 
 from pathlib import Path
+import os
 import json
 import shutil
 import signal
@@ -50,7 +51,7 @@ path = "fase-01/cap-03"
     def run_dispatcher(self, *args, env=None):
         return subprocess.run(
             [sys.executable, str(self.root / "scripts/chapters.py"), *args],
-            cwd="/tmp", capture_output=True, text=True, env=env,
+            cwd=tempfile.gettempdir(), capture_output=True, text=True, env=env,
         )
 
     def test_default_cwd_and_literal_arguments(self):
@@ -70,6 +71,7 @@ path = "fase-01/cap-03"
         result = self.run_dispatcher("run", "1", "2", env={**os.environ, "FIAP_TEST_EXIT": "37"})
         self.assertEqual(result.returncode, 37)
 
+    @unittest.skipIf(os.name == "nt", "Sinais POSIX são específicos do Unix")
     def test_signal_propagation(self):
         (self.project / "probe.py").write_text(
             "import os, signal\nos.kill(os.getpid(), signal.SIGTERM)\n"
@@ -139,12 +141,24 @@ path = "fase-01/cap-03"
         self.assertEqual(result.returncode, 127)
         self.assertIn("Instale a ferramenta", result.stderr)
 
+    @unittest.skipUnless(os.name == "nt", "Batch é específico do Windows")
+    def test_windows_batch_exit_code_and_unsafe_arguments(self):
+        batch = self.project / "fixture.cmd"
+        batch.write_text("@echo off\r\nexit /b 37\r\n", encoding="utf-8")
+        self.write_config(self.config.replace(json.dumps(sys.executable) + ', "probe.py"', json.dumps(str(batch))))
+        result = self.run_dispatcher("run", "1", "2", "--", "with spaces")
+        self.assertEqual(result.returncode, 37, result.stderr)
+        result = self.run_dispatcher("run", "1", "2", "--", "& echo unexpected")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("execução segura", result.stderr)
+        self.assertFalse((self.project / "unexpected").exists())
+
     @unittest.skipUnless(shutil.which("just"), "Just não instalado neste ambiente")
     def test_just_end_to_end(self):
         import os
         args = ["with spaces", "", "$(touch unexpected)", "--flag"]
         command = ["just", "--justfile", str(self.root / "Justfile"), "run", "1", "2", "--", *args]
-        result = subprocess.run(command, cwd="/tmp", capture_output=True, text=True)
+        result = subprocess.run(command, cwd=tempfile.gettempdir(), capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), [str(self.project), args])
         result = subprocess.run(command, capture_output=True, env={**os.environ, "FIAP_TEST_EXIT": "37"})

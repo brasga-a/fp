@@ -20,7 +20,18 @@ impl Manager {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        if tool.file_name().is_some_and(|n| n == "docker") {
+        #[cfg(windows)]
+        if self
+            .docker_host
+            .as_ref()
+            .is_some_and(|h| h.starts_with("unix://"))
+        {
+            return Err("E_PLATFORM: endpoint Docker unix:// de Linux incompatível com Windows; utilize Docker Desktop e um registro próprio, sem migrar volumes automaticamente".into());
+        }
+        if tool
+            .file_name()
+            .is_some_and(|n| n == "docker" || n == "docker.exe")
+        {
             if let Some(host) = &self.docker_host {
                 cmd.env_remove("DOCKER_CONTEXT")
                     .env_remove("DOCKER_TLS_VERIFY")

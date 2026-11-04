@@ -1,3 +1,181 @@
+# Validação — 2026-11-04 (FP 0.6.0)
+
+Implementação Windows x86_64 MSVC adicionada aos quatro crates. **A validação
+nativa Windows ainda está pendente; esta entrega não declara suporte completo.**
+A validação local inicial ocorreu antes da autorização de commit/push.
+Nenhuma tag, release ou instalação global foi realizada.
+
+## Linux nativo
+
+Ambiente: Linux x86_64 GNU, Cargo/Rust 1.99.1, Python 3.14.8, Just 1.59.0.
+
+| Verificação | Resultado |
+| --- | --- |
+| `cargo fmt --all --check` | Passou |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | Passou |
+| `cargo test --workspace --locked` | 109 testes Rust passaram |
+| `cargo build --release --locked` | Passou |
+| `cargo build --release --locked --target x86_64-unknown-linux-gnu` | Passou |
+| `target/release/fp --help` / `--version` | Passaram; versão `fp 0.6.0` |
+| `fp update --check` (binário release local) | Consulta real oficial passou, sem alterações; release remota v0.3.0, sem downgrade |
+| Testes Python do template | 11 passaram; 1 caso batch Windows não executado no Linux |
+| `python3 tools/test_release.py` | 5 testes passaram, incluindo ZIP/tar e checksums |
+| `python3 tools/check_release.py v0.6.0` e entrada TAG no ambiente | Passaram |
+| Três verificadores PTY Linux | 13 cenários de criação, 5 de exclusão e 5 de bancos passaram |
+| YAML dos workflows e `git diff --check` | Passaram na análise local |
+| Pacote Linux e SHA-256 | Pacote real gerado; checksum conferido no diretório dist |
+
+Os testes usam diretórios temporários, executáveis simulados e SQLite embarcado.
+Não foram executados Docker, systemd, inicializadores de ecossistemas, projetos
+acadêmicos, bancos reais ou operações em `~/fiap`. O bootstrap Linux continua
+coberto por SetupHost simulado. Testes de sinais, permissões POSIX e ELF ficam
+condicionados à plataforma correspondente; parsing, criação, rollback, SQLite,
+persistência e JSON continuam compartilhados.
+
+## Windows: compilação versus execução
+
+O sistema local não tem Windows, rustup ou runner remoto com estas alterações.
+A tentativa inicial de `cargo check --workspace --locked --target
+x86_64-pc-windows-msvc` parou por ausência da biblioteca padrão do target.
+Para ampliar a checagem, um compilador/std oficiais Rust 1.99.1, com SHA-256
+verificado, foram preparados exclusivamente em `/tmp`, junto de SDK/CRT e
+cargo-xwin temporários. Isso não instala dependências globais nem comprova
+execução Windows.
+
+Com Rust oficial 1.99.1, cargo-xwin 0.23.1 e SDK/CRT MSVC temporários:
+
+| Checagem cruzada para `x86_64-pc-windows-msvc` | Resultado |
+| --- | --- |
+| `cargo xwin check --workspace --all-targets --target TARGET --locked --offline` | Passou nos quatro crates e alvos de teste |
+| `cargo xwin clippy --workspace --all-targets --target TARGET --locked --offline -- -D warnings` | Passou |
+| `cargo xwin build --release --target TARGET --locked --offline` | Passou; gerou fp.exe |
+| `cargo xwin test --workspace --no-run --target TARGET --locked --offline` | Todos os executáveis de teste foram compilados e ligados; nenhum teste executado |
+| Inspeção com `file` / `llvm-readobj` | PE32+ x86-64/console, chamadas de identidade Win32, DPAPI e ProcessPrng presentes |
+
+O executável foi copiado para `target/x86_64-pc-windows-msvc/release/fp.exe`.
+O ZIP local `dist/fp-v0.6.0-x86_64-pc-windows-msvc.zip` foi montado a partir desse
+binário de compilação cruzada; contém somente `fp.exe`, com conteúdo conferido
+byte a byte e SHA-256 validado. **O empacotador Windows completo, que executa
+--help/--version, ainda precisa rodar no runner Windows.** O pacote Linux real
+foi gerado pelo empacotador completo. `dist/SHA256SUMS` verifica ambos os pacotes.
+Os logs finais estão em `target/validation/` (check, Clippy, build e compilação
+dos testes Windows, testes/builds e PTYs Linux).
+
+A inspeção detectou a dependência padrão MSVC em `VCRUNTIME140.dll`/UCRT. Para
+instalação standalone num Windows sem ferramentas de desenvolvimento, verifique
+os runtimes apropriados do [Visual C++ Redistributable x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+O FP não os instala automaticamente. A execução numa máquina limpa permanece
+parte da validação anterior à primeira release Windows.
+
+Os comandos `cargo test` Windows nativos, `fp.exe --help`, `fp.exe --version`,
+DPAPI real, comportamento de arquivos NTFS e terminal Windows **não foram
+executados**. A configuração de CI, os testes com respostas HTTP simuladas e a
+checagem cruzada não substituem esses resultados.
+
+## Implementação e limites
+
+| Domínio | API/diferença tratada |
+| --- | --- |
+| Processos | PATH e nomes nativos; PATHEXT/EXE/batch no Windows; Command com argv separado, streams herdados e exit codes nativos; sinais preservados no Unix |
+| Publicação | Criação exclusiva e cópia entre filesystems; links relativos internos, recusa de links externos/especiais e rollback que preserva arquivos concorrentes |
+| Raiz | `std::env::home_dir` para o perfil; `--root` > `FP_ROOT` > `~/fiap`; PathBuf e caminhos Unicode/com espaços |
+| Exclusão acadêmica | Identidade dev/ino no Unix; GetFileInformationByHandleEx/FileIdInfo no Windows; rejeição de reparse points |
+| SQLite | rusqlite bundled preservado; volume/ID Windows separado e opcional no JSON; registros Unix compatíveis; recusa de identidade ausente, substituições e hardlinks |
+| Credenciais | getrandom criptográfico, POSIX 0700/0600 e DPAPI do usuário no Windows; recusa de links/corrupção; nenhuma rotação silenciosa |
+| Bootstrap | runtime/linux.rs compilado somente em Linux; setup-runtime Windows retorna E_PLATFORM e indica Docker Desktop |
+| Docker | docker.exe/contexto do usuário no Windows; Linux containers; volumes/portas preservados, sem converter unix:// nem alterar configuração global |
+| Atualizador | Target/executável e nomes ZIP/tar por plataforma; check oficial; instalação Windows recusada antes da rede, sem substituição insegura |
+| Templates | Just com Python direto, python3 no Linux/python no Windows; Windows subprocess aguarda conclusão; argumentos batch inseguros recusados |
+
+As condicionais novas estão em módulos/funções de domínio: `#[cfg(target_os =
+"linux")]` para runtime/instalação Linux, `#[cfg(windows)]` para Win32/DPAPI e
+`#[cfg(unix)]` para metadados/permissões e sinais Unix. Testes usam `#[cfg(test)]`
+e atributos individuais; a suíte inteira de bootstrap é Linux-only. Não há
+`cfg!` escondendo tipos que não compilam e não foi criado crate de plataforma.
+
+`fp init` Windows prepara o workspace e `--check` permanece sem escrita. SQLite
+não depende de Docker. `--academic-only`, CLI declarativa/aliases, `--no-input`,
+`--output json`, `--dry-run` e Cliclack são preservados. Docker é opcional e ainda
+requer validação real autorizada com Docker Desktop. Symlinks Windows podem
+exigir Developer Mode; erros preservam arquivos, sem elevação automática.
+`fp update` Windows exige instalação manual/Cargo; só `--check` está disponível.
+
+## GitHub Actions e pendências para a primeira release Windows
+
+`ci.yml` contém matriz Ubuntu/Windows MSVC com fmt, check, Clippy, testes e build
+release nativos. Testa templates, simula ferramentas, verifica o binário e gera
+os pacotes esperados com SHA-256. Push comum/PR/CI manual não publicam releases.
+`release.yml` reutiliza a matriz, valida a tag existente, combina checksums e
+mantém recusa de releases existentes, publicação em rascunho e escrita somente
+no job de publicação. Artefatos: `fp-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` e
+`fp-vX.Y.Z-x86_64-pc-windows-msvc.zip` (com `fp.exe`).
+
+O Actions não foi executado durante a validação local inicial, quando estas
+alterações ainda estavam apenas no workspace e não havia autorização de commit/push.
+O usuário autorizou em seguida commitar e subir a revisão para executar o CI.
+Os resultados dos runners nativos devem ser registrados com o link da execução
+antes de declarar suporte Windows completo.
+Também falta validar a TUI num console Windows, os inicializadores opcionais
+reais e Docker Desktop em recursos descartáveis autorizados. Não há instalação
+automática Windows nesta versão.
+
+## Arquivos alterados
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `.gitignore`
+- `AGENTS.md`
+- `CHANGELOG.md`
+- `CONTRIBUTING.md`
+- `Cargo.lock`
+- `Cargo.toml`
+- `README.md`
+- `VALIDATION.md`
+- `assets/workspace/AGENTS.md`
+- `assets/workspace/Justfile`
+- `assets/workspace/README.md`
+- `assets/workspace/scripts/chapters.py`
+- `assets/workspace/tests/test_chapters.py`
+- `crates/fp-cli/src/cli.rs`
+- `crates/fp-cli/src/database.rs`
+- `crates/fp-cli/src/main.rs`
+- `crates/fp-cli/src/technology_menu.rs`
+- `crates/fp-cli/src/update.rs`
+- `crates/fp-cli/src/workspace_ui.rs`
+- `crates/fp-cli/tests/contracts.rs`
+- `crates/fp-cli/tests/delete.rs`
+- `crates/fp-cli/tests/native.rs`
+- `crates/fp-cli/tests/support/tool.rs`
+- `crates/fp-cli/tests/workspace.rs`
+- `crates/fp-database/Cargo.toml`
+- `crates/fp-database/src/credentials.rs`
+- `crates/fp-database/src/credentials/windows.rs`
+- `crates/fp-database/src/file_identity.rs`
+- `crates/fp-database/src/lib.rs`
+- `crates/fp-database/src/manager.rs`
+- `crates/fp-database/src/model.rs`
+- `crates/fp-database/src/process.rs`
+- `crates/fp-database/src/runtime.rs`
+- `crates/fp-database/src/runtime/linux.rs`
+- `crates/fp-database/tests/manager.rs`
+- `crates/fp-database/tests/runtime.rs`
+- `crates/fp-update/src/lib.rs`
+- `crates/fp-workspace/Cargo.toml`
+- `crates/fp-workspace/src/create.rs`
+- `crates/fp-workspace/src/delete.rs`
+- `crates/fp-workspace/src/discovery.rs`
+- `crates/fp-workspace/src/identity.rs`
+- `crates/fp-workspace/src/lib.rs`
+- `crates/fp-workspace/src/processes.rs`
+- `crates/fp-workspace/src/python_workspace.rs`
+- `crates/fp-workspace/src/root.rs`
+- `crates/fp-workspace/src/workspace.rs`
+- `tools/check_release.py`
+- `tools/package_release.py`
+- `tools/test_release.py`
+
+---
+
 # Validação — 2026-11-04 (FP 0.5.0)
 
 O template acadêmico e o diagnóstico de `fp init` exigem Python 3.14+.

@@ -3,8 +3,10 @@ use fiap_projects::{
     cli::{Cli, Commands},
     delete, registry,
 };
-use std::{fs, os::unix::fs::symlink, process::Command};
-use tempfile::{TempDir, tempdir};
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
+use std::{fs, process::Command};
+use tempfile::TempDir;
 
 fn repo() -> TempDir {
     let dir = tempdir().unwrap();
@@ -136,6 +138,7 @@ fn replaced_directory_is_not_deleted() {
     assert!(dir.path().join("original-chapter/original").is_file());
 }
 #[test]
+#[cfg(unix)]
 fn symlinks_and_invalid_selections_are_rejected() {
     let dir = repo();
     let outside = tempdir().unwrap();
@@ -248,4 +251,8 @@ fn workspace_changed_after_confirmation_restores_chapter_without_overwriting_edi
         fs::read_to_string(dir.path().join("chapters.toml")).unwrap(),
         before_registry
     );
+}
+
+fn tempdir() -> std::io::Result<TempDir> {
+    tempfile::tempdir_in(std::env::temp_dir().canonicalize()?)
 }

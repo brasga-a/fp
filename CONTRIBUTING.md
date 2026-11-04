@@ -7,7 +7,7 @@ Leia o [README](README.md) e as [instruções para agentes](AGENTS.md).
 ## Preparar o ambiente
 
 Use Rust stable recente, Cargo, rustfmt, Clippy, Just e Python 3.14+.
-Python e Just são usados nos testes do dispatcher e nos testes de terminal;
+Use Just 1.39+ (o CI fixa 1.59.0). Python e Just são usados nos testes do dispatcher e nos testes de terminal;
 não são runtimes do executável FP. Ferramentas como uv, vp, PlatformIO e Zed
 são simuladas nos testes: não é necessário instalar todos os ecossistemas.
 
@@ -132,7 +132,7 @@ Em 0.3.0, `fp init` também prepara o runtime rootless. Nos testes acadêmicos u
 `RuntimeLocation` temporários. Nunca chamem systemd/Docker reais ou baixem imagens.
 SQLite é embarcado: teste SQL real em arquivos temporários, sem mock de sqlite3.
 Ao atualizar pacotes rootless, revise a origem e fixe os novos hashes em
-`crates/fp-database/src/runtime.rs`; não use URLs ou versões fornecidas por entrada
+`crates/fp-database/src/runtime/linux.rs`; não use URLs ou versões fornecidas por entrada
 arbitrária. Credenciais locais são privadas, não criptografadas: não as inclua
 em fixtures, snapshots, commits ou logs. Apenas novas instâncias podem receber
 segredos automáticos; adoções preservam as credenciais e o daemon existentes.
@@ -143,3 +143,59 @@ Release → Run workflow na branch main e informe a tag já existente. A execuç
 manual faz checkout de `refs/tags/TAG`, valida Cargo e compila o código exato da
 tag. Não mova tags para corrigir infraestrutura de CI. Python 3.14 é selecionado
 explicitamente no runner Ubuntu 22.04, cujo Python de sistema é 3.10.
+
+## Portabilidade Linux / Windows
+
+Preserve os quatro crates e use a biblioteca padrão multiplataforma primeiro.
+Isole APIs Unix compartilhadas com `#[cfg(unix)]`, bootstrap Linux/systemd com
+`#[cfg(target_os = "linux")]` e Win32/DPAPI com `#[cfg(windows)]`. `cfg!` não
+esconde imports ou tipos inválidos. Não crie uma camada genérica de plataforma.
+As únicas dependências diretas adicionais desta implementação são `getrandom`
+(já transitiva; aleatoriedade do sistema) e `windows-sys` sob target Windows
+(já transitiva; APIs estáveis de identidade e DPAPI). O SQLite continua sendo
+`rusqlite` com `bundled`; `self_update` usa HTTPS/rustls sem OpenSSL do sistema.
+Não há novos crates funcionais ou bibliotecas substituídas.
+
+No Windows, instale Rust MSVC, Build Tools C++/Windows SDK, Just e Python 3.14+
+com o comando `python` no PATH. O executável usa VCRUNTIME140/UCRT padrão do
+MSVC; verifique também uma instalação standalone com o redistributable x64
+apropriado antes da primeira release. Não use WSL como prova de execução Windows.
+Execute nativamente:
+
+```powershell
+cargo fmt --all --check
+cargo check --workspace --locked --target x86_64-pc-windows-msvc
+cargo clippy --workspace --locked --all-targets --target x86_64-pc-windows-msvc -- -D warnings
+cargo test --workspace --locked --target x86_64-pc-windows-msvc
+cargo build --release --locked --target x86_64-pc-windows-msvc
+python -m unittest discover -s assets/workspace/tests -v
+```
+
+O workflow `ci.yml` executa esses comandos nativamente nos runners Ubuntu e
+Windows e guarda os dois pacotes com checksums por target, sem publicar releases.
+`release.yml` reutiliza a matriz para uma tag existente validada, combina os
+checksums e mantém publicação em rascunho, recusa de releases existentes e
+permissão de escrita apenas no job de publicação. CI manual valida a revisão
+já disponível no GitHub; não consegue executar alterações ainda apenas locais.
+Nunca faça commit/push apenas para dispará-lo sem autorização.
+
+Testes que usam Bash, sinais ou permissões POSIX têm atributos individuais.
+As suítes compartilhadas mantêm parsing, diretórios, criação, rollback, SQLite,
+identidade persistida e JSON sem TTY. Executáveis Rust simulados cobrem
+inicializadores nativos, streams e códigos de saída. Só a suíte do bootstrap
+rootless é inteiramente Linux, por testar exclusivamente esse domínio. Testes
+Windows adicionais cobrem batch, DPAPI, registros incompatíveis e recusa de
+bootstrap. Não execute Docker real. Os três testes PTY são Linux, pois usam PTYs
+POSIX; isso não comprova a experiência visual num console Windows.
+
+Não declare suporte Windows completo antes de registrar a execução nativa em
+VALIDATION.md, com link do Actions e resultados. Antes da primeira distribuição,
+valide também um terminal Windows, os inicializadores opcionais reais e Docker
+Desktop com Linux containers em recursos descartáveis autorizados. A atualização
+Windows permanece manual; não implemente substituição insegura para obter paridade.
+
+As APIs Win32 usadas são documentadas pela Microsoft:
+[GetFileInformationByHandleEx](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyhandleex)
+e [DPAPI](https://learn.microsoft.com/en-us/windows/win32/seccrypto/data-protection).
+O Just usa a [configuração de interpretador](https://just.systems/man/en/settings.html)
+e argumentos posicionais, sem interpolar os argumentos do usuário em código.

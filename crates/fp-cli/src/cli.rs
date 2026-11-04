@@ -23,7 +23,7 @@ pub enum Commands {
         #[arg(long)]
         check: bool,
     },
-    /// Prepara o workspace acadêmico e baixa o runtime rootless dos bancos
+    /// Prepara o workspace acadêmico (no Linux também prepara Docker rootless)
     Init {
         /// Verifica sem criar ou modificar arquivos
         #[arg(long)]

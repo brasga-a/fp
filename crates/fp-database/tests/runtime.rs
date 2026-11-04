@@ -1,8 +1,9 @@
+#![cfg(target_os = "linux")]
 use fp_database::{runtime::*, *};
 use std::{
     collections::HashSet,
     fs,
-    os::unix::fs::{PermissionsExt, symlink},
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -151,43 +152,6 @@ fn foreign_service_is_not_overwritten() {
             .contains("E_CONFLICT")
     );
     assert_eq!(fs::read_to_string(p).unwrap(), "custom service");
-}
-#[test]
-fn secrets_are_random_private_idempotent_and_never_regenerated_on_read() {
-    let (_t, m, _) = fixture();
-    m.init(false).unwrap();
-    let a = m.generated_password("one", true).unwrap();
-    let b = m.generated_password("two", true).unwrap();
-    assert_eq!(a.len(), 64);
-    assert_ne!(a, b);
-    assert_eq!(m.generated_password("one", true).unwrap(), a);
-    let file = m.paths.config.join("secrets/one");
-    assert_eq!(
-        fs::metadata(&file).unwrap().permissions().mode() & 0o777,
-        0o600
-    );
-    fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
-    assert!(m.generated_password("one", false).is_err());
-    assert!(m.generated_password("missing", false).is_err());
-    assert!(!m.paths.config.join("secrets/missing").exists());
-    fs::remove_file(&file).unwrap();
-    symlink("/dev/null", &file).unwrap();
-    assert!(m.generated_password("one", true).is_err());
-}
-#[test]
-fn sqlite_is_embedded_and_reports_queries() {
-    let (_t, m, _) = fixture();
-    m.init(false).unwrap();
-    m.create(Resource::new("sql".into(), Engine::Sqlite), false, false)
-        .unwrap();
-    let result = m
-        .exec(
-            "sql",
-            b"create table x(n); insert into x values(7); select n from x;",
-            false,
-        )
-        .unwrap();
-    assert_eq!(result["output"], "7\n");
 }
 #[test]
 fn rootless_routing_and_generated_auth_do_not_change_the_legacy_client() {

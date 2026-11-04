@@ -5,9 +5,24 @@ use self_update::{
     backends::github::{Update, UpdateBuilder},
 };
 use semver::Version;
-use std::{fs, io::Read, path::Path, sync::Arc, time::Duration};
+#[cfg(any(test, target_os = "linux"))]
+use std::io::Read;
+use std::{fs, path::Path, sync::Arc, time::Duration};
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
 const TARGET: &str = "x86_64-unknown-linux-gnu";
+#[cfg(all(windows, target_arch = "x86_64", target_env = "msvc"))]
+const TARGET: &str = "x86_64-pc-windows-msvc";
+#[cfg(not(any(
+    all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"),
+    all(windows, target_arch = "x86_64", target_env = "msvc")
+)))]
+const TARGET: &str = "unsupported";
+#[cfg(windows)]
+const EXECUTABLE: &str = "fp.exe";
+#[cfg(unix)]
+const EXECUTABLE: &str = "fp";
+#[cfg(target_os = "linux")]
 const MARKER: &str = "fp-standalone: https://github.com/brasga-a/fp\n";
 const API: &str = "https://api.github.com/repos/brasga-a/fp/releases/";
 
@@ -44,8 +59,8 @@ pub fn builder() -> UpdateBuilder {
         .repo_owner("brasga-a")
         .repo_name("fp")
         .tag_prefix("v")
-        .bin_name("fp")
-        .bin_path_in_archive("fp")
+        .bin_name(EXECUTABLE)
+        .bin_path_in_archive(EXECUTABLE)
         .current_version(env!("CARGO_PKG_VERSION"))
         .target(TARGET)
         .timeout(Duration::from_secs(60))
@@ -71,7 +86,12 @@ pub fn newer(current: &str, latest: &str) -> Result<bool> {
 }
 
 pub fn artifact(version: &Version, target: &str) -> String {
-    format!("fp-v{version}-{target}.tar.gz")
+    let extension = if target == "x86_64-pc-windows-msvc" {
+        "zip"
+    } else {
+        "tar.gz"
+    };
+    format!("fp-v{version}-{target}.{extension}")
 }
 
 pub fn select_asset(assets: &[ReleaseAsset], name: &str) -> Option<ReleaseAsset> {
@@ -110,7 +130,7 @@ pub fn explain(error: self_update::Error) -> Box<dyn std::error::Error> {
 
 // Um marcador explícito evita inferir a origem de um executável apenas pelo PATH.
 // Não admitimos symlinks (inclusive nos ancestrais), hardlinks ou locais de Cargo.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 pub fn standalone(exe: &Path, home: &Path, cargo_home: Option<&Path>) -> Result<fs::Permissions> {
     use std::os::unix::fs::MetadataExt;
     let expected = home.join(".local/bin/fp");
@@ -154,11 +174,12 @@ pub fn standalone(exe: &Path, home: &Path, cargo_home: Option<&Path>) -> Result<
     Ok(meta.permissions())
 }
 
-#[cfg(not(unix))]
+#[cfg(not(target_os = "linux"))]
 pub fn standalone(_: &Path, _: &Path, _: Option<&Path>) -> Result<fs::Permissions> {
-    Err("Atualização direta disponível somente para Linux x86_64 GNU".into())
+    Err("Atualização automática indisponível no Windows; atualize pelo Cargo (--force --locked) ou extraia o ZIP oficial verificado após encerrar o FP. Consulte o README".into())
 }
 
+#[cfg(target_os = "linux")]
 pub fn unchanged(exe: &Path, original: &fs::Metadata) -> Result<()> {
     use std::os::unix::fs::MetadataExt;
     let now = fs::symlink_metadata(exe)?;
@@ -174,6 +195,7 @@ pub fn unchanged(exe: &Path, original: &fs::Metadata) -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 pub fn install_builder(
     version: &Version,
     exe: &Path,
@@ -239,7 +261,22 @@ pub fn target() -> &'static str {
     self_update::get_target()
 }
 
+pub fn installation_available() -> Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        if target() == TARGET && TARGET != "unsupported" {
+            return Ok(());
+        }
+        Err("Sem distribuição compatível com esta plataforma".into())
+    }
+    #[cfg(windows)]
+    {
+        Err("Atualização automática indisponível no Windows; use cargo install pelo método original com --force --locked ou instale manualmente o ZIP oficial com SHA-256 verificado e FP encerrado. Consulte o README".into())
+    }
+}
+
 /// Plano de atualização: mantém identidade e permissões até a instalação.
+#[cfg(target_os = "linux")]
 pub struct InstallPlan {
     version: semver::Version,
     exe: std::path::PathBuf,
@@ -262,7 +299,9 @@ pub fn check() -> Result<Available> {
         newer: newer(env!("CARGO_PKG_VERSION"), latest.version())?,
     })
 }
+#[cfg(target_os = "linux")]
 pub fn prepare_install(version: &semver::Version) -> Result<InstallPlan> {
+    installation_available()?;
     if !newer(env!("CARGO_PKG_VERSION"), &version.to_string())? {
         return Err("FP já atualizado; downgrade recusado".into());
     }
@@ -290,6 +329,7 @@ pub fn prepare_install(version: &semver::Version) -> Result<InstallPlan> {
         identity,
     })
 }
+#[cfg(target_os = "linux")]
 pub fn install(plan: InstallPlan) -> Result<()> {
     standalone(&plan.exe, &plan.home, plan.cargo_home.as_deref())?;
     unchanged(&plan.exe, &plan.identity)?;
@@ -303,11 +343,27 @@ pub fn install(plan: InstallPlan) -> Result<()> {
     Ok(())
 }
 
+#[cfg(windows)]
+pub struct InstallPlan {
+    _private: (),
+}
+#[cfg(windows)]
+pub fn prepare_install(_: &Version) -> Result<InstallPlan> {
+    installation_available()?;
+    unreachable!("Instalador Windows indisponível")
+}
+#[cfg(windows)]
+pub fn install(_: InstallPlan) -> Result<()> {
+    Err("Atualização automática indisponível no Windows".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use self_update::http_client::{HeaderMap, HttpClient, HttpResponse};
+    #[cfg(target_os = "linux")]
     use std::os::unix::fs::{PermissionsExt, symlink};
+    #[cfg(target_os = "linux")]
     use std::path::PathBuf;
     use std::{collections::HashMap, io::Cursor, sync::Mutex};
 
@@ -378,6 +434,31 @@ mod tests {
         }
     }
     #[test]
+    fn distribution_formats_match_platform() {
+        let version = stable_version("1.2.3").unwrap();
+        assert_eq!(
+            artifact(&version, "x86_64-pc-windows-msvc"),
+            "fp-v1.2.3-x86_64-pc-windows-msvc.zip"
+        );
+        assert_eq!(
+            artifact(&version, "x86_64-unknown-linux-gnu"),
+            "fp-v1.2.3-x86_64-unknown-linux-gnu.tar.gz"
+        );
+    }
+    #[test]
+    #[cfg(windows)]
+    fn windows_installer_refuses_before_network_or_mutation() {
+        assert_eq!(TARGET, "x86_64-pc-windows-msvc");
+        assert_eq!(EXECUTABLE, "fp.exe");
+        assert!(
+            prepare_install(&stable_version("999.0.0").unwrap())
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("indisponível no Windows")
+        );
+    }
+    #[test]
     fn exact_target_and_official_source_only() {
         let name = artifact(&stable_version("0.2.0").unwrap(), TARGET);
         let assets = [ReleaseAsset::new(name.clone(), format!("{API}assets/1"))];
@@ -422,6 +503,7 @@ mod tests {
         assert!(explain(error).to_string().contains("não encontrado"));
     }
     #[test]
+    #[cfg(target_os = "linux")]
     fn checksum_missing_invalid_and_truncated_download_preserve_installation() {
         for (sums, archive) in [
             (None, ARCHIVE),
@@ -451,6 +533,7 @@ mod tests {
         }
     }
     #[test]
+    #[cfg(target_os = "linux")]
     fn download_failure_preserves_original() {
         let temp = tempfile::tempdir().unwrap();
         let exe = temp.path().join("fp");
@@ -476,6 +559,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn concurrent_installation_change_is_rejected() {
         let temp = tempfile::tempdir().unwrap();
         let exe = temp.path().join("fp");
@@ -490,6 +574,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn invalid_extracted_binary_is_rejected() {
         let temp = tempfile::tempdir().unwrap();
         let exe = temp.path().join("fp");
@@ -517,6 +602,7 @@ mod tests {
         assert_eq!(fs::read(exe).unwrap(), b"original");
     }
     #[test]
+    #[cfg(target_os = "linux")]
     fn isolated_replacement_and_install_failure() {
         let temp = tempfile::tempdir().unwrap();
         let exe = temp.path().join("fp");
@@ -576,6 +662,7 @@ mod tests {
             .is_err()
         );
     }
+    #[cfg(target_os = "linux")]
     fn installation() -> (tempfile::TempDir, PathBuf) {
         let home = tempfile::tempdir().unwrap();
         let bin = home.path().join(".local/bin");
@@ -587,6 +674,7 @@ mod tests {
         (home, exe)
     }
     #[test]
+    #[cfg(target_os = "linux")]
     fn standalone_requires_explicit_origin_and_write_permission() {
         let (home, exe) = installation();
         assert!(standalone(&exe, home.path(), None).is_ok());
@@ -606,6 +694,7 @@ mod tests {
         assert!(standalone(&exe, home.path(), None).is_err());
     }
     #[test]
+    #[cfg(target_os = "linux")]
     fn cargo_system_unknown_symlink_and_hardlink_are_refused() {
         let (home, exe) = installation();
         assert!(standalone(&exe, home.path(), Some(&home.path().join(".local"))).is_err());

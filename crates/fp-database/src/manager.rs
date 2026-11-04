@@ -3,7 +3,6 @@ use serde_json::{Value, json};
 use std::{
     fs,
     io::Write,
-    os::unix::fs::MetadataExt,
     path::PathBuf,
     thread,
     time::{Duration, Instant},
@@ -25,7 +24,7 @@ impl Manager {
     pub fn new(paths: Paths) -> Self {
         Self {
             paths,
-            docker: "docker".into(),
+            docker: docker_program(),
             timeout: Duration::from_secs(60),
             docker_host: None,
         }
@@ -218,20 +217,32 @@ impl Manager {
         if r.engine == Engine::Sqlite {
             let p = r.file.as_ref().unwrap();
             if existing {
-                this.sqlite_execute(p, "PRAGMA schema_version;", true)?;
+                crate::file_identity::record(&mut r)?;
+                let _guard = crate::file_identity::checked(&r, false)?;
+                this.sqlite_execute(r.file.as_ref().unwrap(), "PRAGMA schema_version;", true)?;
             } else {
                 let _file = fs::OpenOptions::new()
                     .write(true)
                     .create_new(true)
                     .open(p)?;
-                if let Err(e) = this.sqlite_execute(p, "PRAGMA user_version=0;", false) {
-                    let _ = fs::remove_file(p);
+                crate::file_identity::record(&mut r)?;
+                let guard = crate::file_identity::checked(&r, false)?;
+                if let Err(e) =
+                    this.sqlite_execute(r.file.as_ref().unwrap(), "PRAGMA user_version=0;", false)
+                {
+                    drop(guard);
+                    drop(_file);
+                    let _ = fs::remove_file(r.file.as_ref().unwrap());
                     return Err(e);
                 }
                 r.owned = true;
             }
         } else {
             this.docker(&["info"])?;
+            #[cfg(windows)]
+            if this.docker(&["info", "--format", "{{.OSType}}"])?.trim() != "linux" {
+                return Err("E_PLATFORM: Oracle/MongoDB exigem Linux containers; selecione essa opção no Docker Desktop".into());
+            }
             let container = r.container.as_ref().unwrap();
             let volume = r.volume.as_ref().unwrap();
             if existing {
@@ -334,10 +345,6 @@ impl Manager {
                 r.owned = true;
             }
         }
-        if let Some(file) = &r.file {
-            let meta = fs::symlink_metadata(file)?;
-            r.file_identity = Some((meta.dev(), meta.ino()));
-        }
         resources.push(r.clone());
         this.save(&resources)?;
         this.log("create", &r.id)?;
@@ -365,9 +372,7 @@ impl Manager {
         let _lock = this.lock()?;
         this.log("operation:start", id)?;
         if r.engine == Engine::Sqlite {
-            if !r.file.as_ref().is_some_and(|p| p.is_file()) {
-                return Err("E_NOT_FOUND: arquivo SQLite ausente".into());
-            }
+            let _guard = crate::file_identity::checked(&r, false)?;
         } else {
             let v = this.identity(&r)?;
             if v["State"]["Running"].as_bool() != Some(!stop) {
@@ -431,14 +436,6 @@ impl Manager {
             json!({"id":id,"logs":this.docker(&["logs","--tail","100",r.container.as_ref().unwrap()])?}),
         )
     }
-    fn sqlite_identity(&self, r: &Resource) -> Result<()> {
-        let p = r.file.as_ref().ok_or("E_CONFIG: arquivo ausente")?;
-        let meta = fs::symlink_metadata(p)?;
-        if !meta.is_file() || Some((meta.dev(), meta.ino())) != r.file_identity {
-            return Err("E_CONFLICT: identidade do arquivo SQLite mudou".into());
-        }
-        Ok(())
-    }
     pub fn exec(&self, id: &str, script: &[u8], dry: bool) -> Result<Value> {
         let r = self.get(id)?;
         let scoped = self.scoped(&r);
@@ -449,7 +446,7 @@ impl Manager {
         let _lock = this.lock()?;
         this.log("exec:start", id)?;
         let output = if r.engine == Engine::Sqlite {
-            this.sqlite_identity(&r)?;
+            let _guard = crate::file_identity::checked(&r, false)?;
             this.sqlite_execute(
                 r.file.as_ref().unwrap(),
                 std::str::from_utf8(script)?,
@@ -558,12 +555,7 @@ impl Manager {
         let _lock = this.lock()?;
         this.log("operation:start", id)?;
         if r.engine == Engine::Sqlite && data {
-            this.sqlite_identity(&r)?;
-            let p = r.file.as_ref().unwrap();
-            if !fs::symlink_metadata(p)?.is_file() {
-                return Err("E_CONFLICT: tipo de arquivo alterado".into());
-            }
-            fs::remove_file(p)?;
+            crate::file_identity::remove(&r)?;
         } else if r.engine != Engine::Sqlite && container {
             let v = this.identity(&r)?;
             if v["State"]["Running"] == true {
@@ -606,4 +598,13 @@ fn valid_env(s: &str) -> Result<()> {
         return Err("E_CREDENTIALS: nome de variável inválido".into());
     }
     Ok(())
+}
+
+#[cfg(windows)]
+fn docker_program() -> PathBuf {
+    "docker.exe".into()
+}
+#[cfg(unix)]
+fn docker_program() -> PathBuf {
+    "docker".into()
 }

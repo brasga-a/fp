@@ -82,3 +82,14 @@ código são criados por demanda; `fp init` não inventa projetos acadêmicos.
 `AGENTS.md`, Justfile e o registro, são preservadas. Ele informa conflitos de
 caminho/configuração e ferramentas ausentes no PATH, sem usar sudo nem alterar
 o PATH, configurações globais, Git ou permissões do Docker.
+
+## Linux e Windows
+
+O gerenciamento não exige WSL ou Bash. Use Just 1.39+ e Python 3.14+ no PATH:
+`python3` no Linux e `python` no Windows. O Just verifica a disponibilidade e usa
+Python diretamente como interpretador das receitas, sem interpolar argumentos.
+O dispatcher preserva stdin/stdout/stderr e códigos de saída; no Windows aguarda
+o subprocesso. Batch `.cmd`/`.bat` com metacaracteres inseguros é recusado: registre
+um `.exe` ou seu interpretador com argumentos explícitos. Os comandos de cada
+capítulo continuam dependendo das ferramentas e plataformas para que foram escritos.
+Os arquivos existentes não são migrados automaticamente pelo FP.

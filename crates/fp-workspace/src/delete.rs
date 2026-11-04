@@ -1,7 +1,6 @@
 use crate::{Result, discovery, python_workspace, registry};
 use std::{
     fs,
-    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
 };
 use toml_edit::{DocumentMut, Item};
@@ -13,7 +12,7 @@ pub struct Plan {
     root: PathBuf,
     before: String,
     after: DocumentMut,
-    identity: (u64, u64),
+    identity: crate::identity::Identity,
     python: Option<python_workspace::Change>,
 }
 
@@ -38,7 +37,6 @@ pub fn prepare(root: &Path, phase: u32, chapter: Option<u32>) -> Result<Plan> {
     } else {
         phase.path
     };
-    let metadata = fs::symlink_metadata(&target)?;
     let before = fs::read_to_string(root.join("chapters.toml"))?;
     let mut after = registry::load(&root)?;
     let mut registrations = Vec::new();
@@ -66,12 +64,12 @@ pub fn prepare(root: &Path, phase: u32, chapter: Option<u32>) -> Result<Plan> {
     }
     let python = python_workspace::Change::remove(&root, &target)?;
     Ok(Plan {
-        target,
+        target: target.clone(),
         registrations,
         root,
         before,
         after,
-        identity: (metadata.dev(), metadata.ino()),
+        identity: crate::identity::identify(&target)?,
         python,
     })
 }
@@ -95,12 +93,14 @@ pub fn execute(plan: &Plan, confirmed: bool) -> Result<()> {
         .open(&lock_path)
         .map_err(|e| format!("Não foi possível obter .fp-init.lock: {e}"))?;
     let _lock = Lock(lock_path);
+    drop(_file);
     if fs::read_to_string(plan.root.join("chapters.toml"))? != plan.before {
         return Err("Registro alterado desde a confirmação; execute fp delete novamente".into());
     }
     let metadata = fs::symlink_metadata(&plan.target)?;
     if !metadata.is_dir()
-        || (metadata.dev(), metadata.ino()) != plan.identity
+        || crate::identity::is_link(&metadata)
+        || crate::identity::identify(&plan.target)? != plan.identity
         || plan.target.canonicalize()? != plan.target
     {
         return Err("O diretório selecionado mudou; execute fp delete novamente".into());

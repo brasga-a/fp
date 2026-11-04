@@ -1,5 +1,8 @@
 use fp_database::*;
-use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
+use std::fs;
+#[cfg(unix)]
+use std::{os::unix::fs::PermissionsExt, time::Duration};
+#[cfg(unix)]
 fn tool(root: &std::path::Path, name: &str, body: &str) -> std::path::PathBuf {
     let p = root.join(name);
     fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
@@ -85,6 +88,7 @@ fn sqlite_conflicts_failed_create_and_replaced_files() {
     assert!(!m.paths.data.join("failed.db").exists());
     assert_eq!(m.list().unwrap().len(), 1);
 }
+#[cfg(unix)]
 fn adopted(m: &Manager) {
     let mut r = Resource::new("legacy".into(), Engine::Oracle);
     r.container = Some("fiap-oracle".into());
@@ -93,6 +97,7 @@ fn adopted(m: &Manager) {
     m.create(r, true, false).unwrap();
 }
 #[test]
+#[cfg(unix)]
 fn legacy_reuse_identity_preservation_and_no_implicit_provision() {
     let (t, mut m) = manager();
     m.init(false).unwrap();
@@ -122,6 +127,7 @@ esac"#,
     m.delete("legacy", "legacy", false, false, false).unwrap();
 }
 #[test]
+#[cfg(unix)]
 fn docker_failure_and_timeout_do_not_create_registry_entries() {
     let (t, mut m) = manager();
     m.init(false).unwrap();
@@ -155,6 +161,7 @@ fn credentials_validation_and_names() {
     assert!(m.list().unwrap().is_empty());
 }
 #[test]
+#[cfg(unix)]
 fn docker_provision_persistent_volume_no_start_and_explicit_removal() {
     let (t, mut m) = manager();
     m.init(false).unwrap();
@@ -195,6 +202,7 @@ esac"#,
     );
 }
 #[test]
+#[cfg(unix)]
 fn readiness_timeout_and_stopped_start_are_reported() {
     let (t, mut m) = manager();
     m.init(false).unwrap();
@@ -226,6 +234,7 @@ esac"#
     assert_eq!(m.list().unwrap().len(), 1);
 }
 #[test]
+#[cfg(unix)]
 fn mongodb_authentication_is_forwarded_without_argv_or_registry_secrets() {
     let (t, mut m) = manager();
     m.init(false).unwrap();
@@ -265,4 +274,153 @@ esac"#,
             .unwrap()
             .contains(&value)
     );
+}
+
+#[test]
+fn credentials_persist_without_silent_rotation_and_reject_hardlinks() {
+    let (_t, m) = manager();
+    m.init(false).unwrap();
+    let secret = m.generated_password("one", true).unwrap();
+    assert_eq!(secret.len(), 64);
+    assert_ne!(m.generated_password("two", true).unwrap(), secret);
+    assert_eq!(m.generated_password("one", false).unwrap(), secret);
+    assert_eq!(m.generated_password("one", true).unwrap(), secret);
+    let path = m.paths.config.join("secrets/one");
+    #[cfg(windows)]
+    assert!(
+        !fs::read(&path)
+            .unwrap()
+            .windows(secret.len())
+            .any(|b| b == secret.as_bytes())
+    );
+    fs::hard_link(&path, path.with_extension("link")).unwrap();
+    assert!(m.generated_password("one", false).is_err());
+    fs::remove_file(path.with_extension("link")).unwrap();
+    m.create(Resource::new("one".into(), Engine::Sqlite), false, false)
+        .unwrap();
+    fs::remove_file(&path).unwrap();
+    assert!(m.generated_password("one", true).is_err());
+    assert!(!path.exists());
+}
+#[test]
+fn sqlite_owned_data_can_be_deleted_and_identity_persists() {
+    let (_t, m) = manager();
+    m.init(false).unwrap();
+    m.create(Resource::new("one".into(), Engine::Sqlite), false, false)
+        .unwrap();
+    let p = m.get("one").unwrap().file.unwrap();
+    let reloaded = Manager::new(m.paths.clone());
+    let hardlink = p.with_extension("hardlink");
+    fs::hard_link(&p, &hardlink).unwrap();
+    assert!(reloaded.exec("one", b"select 1;", false).is_err());
+    assert!(reloaded.delete("one", "one", false, true, false).is_err());
+    fs::remove_file(hardlink).unwrap();
+    reloaded
+        .exec(
+            "one",
+            b"create table example(id integer); insert into example values(7);",
+            false,
+        )
+        .unwrap();
+    assert!(
+        reloaded
+            .exec("one", b"select * from example;", false)
+            .unwrap()["output"]
+            .as_str()
+            .unwrap()
+            .contains('7')
+    );
+    reloaded.delete("one", "one", false, true, false).unwrap();
+    assert!(!p.exists());
+    assert!(reloaded.list().unwrap().is_empty());
+}
+#[cfg(windows)]
+#[test]
+fn windows_credentials_are_bound_to_resource_and_runtime_linux_is_refused() {
+    let (_t, m) = manager();
+    m.init(false).unwrap();
+    m.generated_password("one", true).unwrap();
+    fs::copy(
+        m.paths.config.join("secrets/one"),
+        m.paths.config.join("secrets/two"),
+    )
+    .unwrap();
+    assert!(m.generated_password("two", false).is_err());
+    assert!(
+        m.setup_native_runtime(true)
+            .unwrap_err()
+            .to_string()
+            .contains("Docker Desktop")
+    );
+    let before = fs::read(m.paths.config.join("databases.json")).unwrap();
+    fs::write(m.paths.config.join("runtime.json"), "{}").unwrap();
+    assert!(
+        m.installed_runtime()
+            .unwrap_err()
+            .to_string()
+            .contains("E_PLATFORM")
+    );
+    assert_eq!(
+        fs::read(m.paths.config.join("databases.json")).unwrap(),
+        before
+    );
+}
+#[cfg(windows)]
+#[test]
+fn windows_does_not_trust_unix_sqlite_identity() {
+    let (_t, m) = manager();
+    m.init(false).unwrap();
+    m.create(Resource::new("one".into(), Engine::Sqlite), false, false)
+        .unwrap();
+    let registry = m.paths.config.join("databases.json");
+    let mut records: serde_json::Value =
+        serde_json::from_slice(&fs::read(&registry).unwrap()).unwrap();
+    records[0]
+        .as_object_mut()
+        .unwrap()
+        .remove("windows_file_identity");
+    records[0]["file_identity"] = serde_json::json!([1, 2]);
+    fs::write(registry, serde_json::to_vec(&records).unwrap()).unwrap();
+    assert!(m.exec("one", b"select 1;", false).is_err());
+    assert!(m.delete("one", "one", false, true, false).is_err());
+    assert!(m.get("one").unwrap().file.unwrap().exists());
+}
+
+#[test]
+#[cfg(unix)]
+fn secrets_are_random_private_idempotent_and_never_regenerated_on_read() {
+    let (_t, m) = manager();
+    m.init(false).unwrap();
+    let a = m.generated_password("one", true).unwrap();
+    let b = m.generated_password("two", true).unwrap();
+    assert_eq!(a.len(), 64);
+    assert_ne!(a, b);
+    assert_eq!(m.generated_password("one", true).unwrap(), a);
+    let file = m.paths.config.join("secrets/one");
+    assert_eq!(
+        fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(m.generated_password("one", false).is_err());
+    assert!(m.generated_password("missing", false).is_err());
+    assert!(!m.paths.config.join("secrets/missing").exists());
+    fs::remove_file(&file).unwrap();
+    std::os::unix::fs::symlink("/dev/null", &file).unwrap();
+    assert!(m.generated_password("one", true).is_err());
+}
+#[test]
+fn sqlite_is_embedded_and_reports_queries() {
+    let (_t, m) = manager();
+    m.init(false).unwrap();
+    m.create(Resource::new("sql".into(), Engine::Sqlite), false, false)
+        .unwrap();
+    let result = m
+        .exec(
+            "sql",
+            b"create table x(n); insert into x values(7); select n from x;",
+            false,
+        )
+        .unwrap();
+    assert_eq!(result["output"], "7\n");
 }

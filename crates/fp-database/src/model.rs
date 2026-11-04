@@ -26,6 +26,8 @@ pub struct Resource {
     pub docker_host: Option<String>,
     #[serde(default)]
     pub file_identity: Option<(u64, u64)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub windows_file_identity: Option<(u64, [u8; 16])>,
 }
 impl Resource {
     pub fn new(id: String, engine: Engine) -> Self {
@@ -44,6 +46,7 @@ impl Resource {
             docker_id: None,
             docker_host: None,
             file_identity: None,
+            windows_file_identity: None,
         }
     }
 }
@@ -54,6 +57,27 @@ pub struct Paths {
     pub state: PathBuf,
 }
 impl Paths {
+    #[cfg(windows)]
+    pub fn from_env() -> Result<Self> {
+        let directory = |key| -> Result<PathBuf> {
+            std::env::var_os(key)
+                .map(PathBuf::from)
+                .filter(|p| p.is_absolute())
+                .ok_or_else(|| {
+                    format!(
+                        "E_CONFIG: {key} ausente ou relativo; informe os diretórios explicitamente"
+                    )
+                    .into()
+                })
+        };
+        let local = directory("LOCALAPPDATA")?.join("fp");
+        Ok(Self {
+            config: directory("APPDATA")?.join("fp"),
+            data: local.join("data"),
+            state: local.join("state"),
+        })
+    }
+    #[cfg(unix)]
     pub fn from_env() -> Result<Self> {
         let home = std::env::var_os("HOME")
             .map(PathBuf::from)

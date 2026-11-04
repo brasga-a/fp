@@ -89,7 +89,8 @@
   same fp-database API, with structured arguments and explicit results.
 - init only configures directories; create provisions, run only starts existing
   resources. Never invoke the legacy db script or FP_DB_BIN as a fallback.
-- Use XDG directories; tests must override Paths and simulate Docker/clients.
+- Keep Linux XDG directories; Windows uses APPDATA for config and LOCALAPPDATA
+  for SQLite/state. Tests must override Paths and simulate Docker/clients.
   Never touch real containers, volumes, legacy .db files or installed fp in tests.
 - Require --confirm ID for deletion. Removing a registry entry, removing a
   container and deleting persistent data are separate choices. Imported data
@@ -101,7 +102,7 @@
 
 ## Rootless bootstrap
 
-- fp init now bootstraps the dedicated database runtime unless --academic-only
+- On Linux, fp init bootstraps the dedicated database runtime unless --academic-only
   is selected. init --check is read-only. Database init without --setup-runtime
   still only prepares directories. Reflect this distinction in help and tests.
 - Download only pinned official Docker/rootless packages and slirp4netns with
@@ -119,3 +120,37 @@
   systemd, downloads, databases or global user configuration.
 - Missing host prerequisites require a clear one-time administrative instruction;
   never bypass namespaces/security policy to make bootstrap appear successful.
+
+## Native Windows portability
+
+- Keep one Cargo workspace with exactly four functional crates and one final
+  executable: fp on Linux, fp.exe on Windows x86_64 MSVC. Version 0.6.0 introduces
+  the Windows implementation; native Windows validation is still required.
+- Prefer standard cross-platform APIs. Use cfg attributes around real platform
+  differences: target_os = "linux" for rootless/systemd, windows for Win32/DPAPI,
+  unix only for shared Unix APIs. Do not use cfg! to hide invalid code.
+- Credentials live in credentials.rs/credentials/windows.rs, independently of
+  runtime/linux.rs. Preserve POSIX protection and user-scoped DPAPI protection.
+  Never regenerate an existing database's missing password. No plaintext in
+  registry, process arguments or diagnostics.
+- Preserve legacy Unix file_identity serialization. Windows uses a separate
+  optional windows_file_identity (volume and 128-bit file ID). Refuse operations
+  when identity cannot be proven. Never substitute filename-only comparisons.
+- Windows init prepares academic files without Docker bootstrap; init --check
+  stays read-only. setup-runtime must fail clearly and suggest Docker Desktop.
+  Respect user Docker contexts and require Linux containers for Oracle/MongoDB.
+  Never translate persisted unix:// endpoints or migrate volumes automatically.
+- Windows updater checks official release metadata and selects ZIP/fp.exe, but
+  automatic installation is explicitly unavailable. Preserve safe Linux updates
+  and Cargo-managed installations. Document manual Windows installation.
+- Templates use Just with Python as recipe interpreter (python3 on Linux,
+  python on Windows). Preserve literal argv, stdin/out/err and exit codes.
+  Unix dispatcher keeps execvp; Windows waits for subprocess completion.
+  Reject unsafe batch arguments; never interpolate them into shell strings.
+- Gate POSIX tests individually, keep shared tests active, and use native mock
+  executables. Only rootless-bootstrap tests are a Linux-only suite. Never run
+  real Docker or initialize real ecosystem projects in automated tests.
+- Run CI natively on Ubuntu and Windows MSVC. Cross-compilation only proves
+  compilation, not execution. Report unexecuted Windows checks explicitly.
+  Configuring a workflow does not mean it passed. Do not commit/push merely to
+  trigger CI without authorization. Ordinary CI must not publish releases.

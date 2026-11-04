@@ -15,7 +15,7 @@ pub(crate) struct Change {
 fn read(root: &Path) -> Result<Option<String>> {
     let path = root.join("pyproject.toml");
     match fs::symlink_metadata(&path) {
-        Ok(metadata) if metadata.is_file() && !metadata.is_symlink() => {
+        Ok(metadata) if metadata.is_file() && !crate::identity::is_link(&metadata) => {
             Ok(Some(fs::read_to_string(path)?))
         }
         Ok(_) => Err("pyproject.toml da raiz deve ser um arquivo regular, sem links".into()),
@@ -54,7 +54,8 @@ impl Change {
         let relative = target
             .strip_prefix(root)?
             .to_str()
-            .ok_or("Caminho não UTF-8")?;
+            .ok_or("Caminho não UTF-8")?
+            .replace('\\', "/");
         let members = &mut doc["tool"]["uv"]["workspace"]["members"];
         if members.is_none() {
             *members = value(Array::new());
@@ -65,8 +66,11 @@ impl Change {
         if members.iter().any(|v| v.as_str().is_none()) {
             return Err("tool.uv.workspace.members deve conter somente caminhos".into());
         }
-        if !members.iter().any(|v| v.as_str() == Some(relative)) {
-            members.push(relative);
+        if !members
+            .iter()
+            .any(|v| v.as_str() == Some(relative.as_str()))
+        {
+            members.push(relative.as_str());
         }
         configure_analysis(&mut doc, ".");
         Ok(Self {

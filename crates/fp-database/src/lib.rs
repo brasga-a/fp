@@ -9,3 +9,6 @@ pub use model::{Engine, Paths, Resource};
 pub mod runtime;
 
 mod sqlite;
+
+mod credentials;
+mod file_identity;

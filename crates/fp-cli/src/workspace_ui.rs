@@ -1,4 +1,5 @@
 use crate::{Result, workspace::*};
+use fp_workspace::root;
 use std::path::Path;
 pub fn run(root: &Path, check: bool) -> Result<i32> {
     println!("FP · Workspace acadêmico\nRaiz: {}", root.display());
@@ -29,7 +30,7 @@ pub fn run(root: &Path, check: bool) -> Result<i32> {
     let mut required_missing = false;
     for tool in tools(
         &std::env::var_os("PATH").unwrap_or_default(),
-        std::env::var_os("HOME").as_deref(),
+        root::home().as_deref().map(std::path::Path::as_os_str),
     ) {
         if let Some(path) = &tool.executable {
             if tool.label == "Python 3.14+" && !python_supported(path) {
@@ -55,6 +56,13 @@ pub fn run(root: &Path, check: bool) -> Result<i32> {
             );
             if let Some(found) = &tool.outside_path {
                 let directory = found.parent().ok_or("Caminho de ferramenta inválido")?;
+                #[cfg(windows)]
+                println!(
+                    "  Encontrado em {}. Adicione {} ao PATH do usuário e reabra o terminal.",
+                    found.display(),
+                    directory.display()
+                );
+                #[cfg(unix)]
                 println!(
                     "  Encontrado em {}. No Fish: fish_add_path '{}'",
                     found.display(),

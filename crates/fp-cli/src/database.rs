@@ -102,7 +102,14 @@ pub struct Database {
     pub sqlite: bool,
 }
 fn manager(a: &Database) -> Result<Manager> {
-    let mut paths = Paths::from_env()?;
+    let mut paths = match (&a.config_dir, &a.data_dir, &a.state_dir) {
+        (Some(config), Some(data), Some(state)) => Paths {
+            config: config.clone(),
+            data: data.clone(),
+            state: state.clone(),
+        },
+        _ => Paths::from_env()?,
+    };
     if let Some(p) = &a.config_dir {
         paths.config = p.clone();
     }
@@ -137,8 +144,7 @@ pub fn execute(a: &Database, m: &Manager) -> Result<Value> {
     {
         Action::Init => {
             if a.setup_runtime {
-                let location = fp_database::runtime::RuntimeLocation::detect()?;
-                m.setup_runtime(&location, a.dry_run, &fp_database::runtime::NativeSetup(m))
+                m.setup_native_runtime(a.dry_run)
             } else {
                 m.init(a.dry_run)
             }
@@ -150,6 +156,7 @@ pub fn execute(a: &Database, m: &Manager) -> Result<Value> {
                 "mongodb" => Engine::Mongodb,
                 _ => unreachable!(),
             };
+            #[cfg(target_os = "linux")]
             if engine != Engine::Sqlite && !a.existing && m.installed_runtime()?.is_none() {
                 return Err("E_INIT: execute fp init ou fp db init --setup-runtime para preparar o Docker rootless".into());
             }

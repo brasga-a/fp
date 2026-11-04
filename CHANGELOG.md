@@ -5,6 +5,41 @@ As mudanças do FP seguem a política de versionamento semântico descrita em
 
 ## [Unreleased]
 
+## 0.6.0 — 2026-11-04
+
+### Adicionado
+
+- Implementação nativa Windows x86_64 MSVC nos quatro crates, com descoberta de
+  executáveis/PATHEXT, diretório pessoal do perfil e configuração em AppData.
+  Suporte completo permanece condicionado à validação nativa Windows.
+- Identidade SQLite Windows por volume/ID de 128 bits, preservando registros Unix,
+  e credenciais por DPAPI do usuário com aleatoriedade criptográfica do sistema.
+- CI nativo Ubuntu/Windows com fmt, check, Clippy, testes, build release e pacotes
+  tar.gz/ZIP com checksums, sem publicação em CI comum. Release reutiliza a matriz.
+- Testes com executáveis Rust simulados, streams, inicializadores, rollback e
+  persistência; testes Windows para batch, DPAPI e falhas Linux-only explícitas.
+
+### Alterado
+
+- Bootstrap Docker rootless/systemd isolado em runtime/linux.rs. Windows init
+  prepara o workspace; setup-runtime é recusado com indicação de Docker Desktop.
+- Docker Windows utiliza docker.exe e o contexto do usuário, exige Linux
+  containers e recusa endpoints Linux incompatíveis sem migrar dados.
+- Templates Just usam Python como interpretador direto, com argumentos literais,
+  python3 no Linux/python no Windows; dispatcher Windows aguarda o subprocesso.
+  Batch com argumentos inseguros é recusado. Templates existentes são preservados.
+- Atualizador reconhece ZIP/fp.exe e consulta releases oficiais no Windows.
+  Instalação automática Windows permanece recusada, com instruções manuais.
+
+### Corrigido
+
+- Publicação de projetos entre filesystems usa criação exclusiva e rollback por
+  identidade, preservando entradas concorrentes. Links externos e tipos especiais
+  são recusados e symlinks internos são preservados quando a plataforma permite.
+- Locks acadêmicos fecham seus handles antes da remoção no Windows. Operações
+  SQLite verificam identidade e não apagam arquivos substituídos ou com hardlinks.
+- Segredos ausentes de bancos registrados nunca são regenerados silenciosamente.
+
 ## 0.5.0 — 2026-11-04
 
 ### Alterado

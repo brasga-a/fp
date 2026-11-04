@@ -7,3 +7,5 @@ mod python_workspace;
 pub mod registry;
 pub mod root;
 pub mod workspace;
+
+mod identity;

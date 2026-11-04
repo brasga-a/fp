@@ -1,6 +1,9 @@
 use crate::Result;
 use std::io::IsTerminal;
 pub fn run(check: bool) -> Result<i32> {
+    if !check {
+        fp_update::installation_available()?;
+    }
     let info = fp_update::check()?;
     println!(
         "Versão instalada: {}\nÚltima versão estável: {}",

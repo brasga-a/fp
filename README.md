@@ -1,14 +1,15 @@
 # FP — FIAP Projects
 
 CLI nativa em Rust para criar, listar e executar projetos acadêmicos em um
-monorepo poliglota. O executável é `fp`; o pacote Cargo é `fiap-projects`.
+monorepo poliglota. O executável é `fp` no Linux e `fp.exe` no Windows; o pacote Cargo é `fiap-projects`.
 A raiz padrão é `~/fiap`. O FP delega a inicialização às ferramentas dos
 ecossistemas e a execução ao Just.
 
 ## Requisitos e instalação
 
-- Linux, Rust stable recente com Cargo para compilar (edição 2024; validado em 1.99.1).
-- Just para `fp run` e para o teste de integração com Just real.
+- Linux x86_64 GNU validado; Windows x86_64 MSVC implementado, com validação nativa pendente.
+- Rust stable recente com Cargo para compilar (edição 2024; validado em 1.99.1).
+- Just 1.39+ para `fp run` e para o teste de integração com Just real.
 - Terminal interativo para `fp create`; mouse não é necessário.
 - uv, Vite+ (`vp`), Cargo ou PlatformIO (`pio`/`platformio`) apenas para os tipos correspondentes.
 - Zed (`zed`) opcional.
@@ -27,6 +28,114 @@ O binário compilado funciona sem Rust, Python ou Node instalados. **Os comandos
 do repositório continuam exigindo suas ferramentas**: o dispatcher existente de
 `~/fiap`, por exemplo, usa Python 3.14+ e Just. Não é uma dependência do FP para
 listar ou criar pastas.
+
+## Windows nativo (validação nativa pendente)
+
+O mesmo workspace mantém os quatro crates e tem como alvo
+`x86_64-pc-windows-msvc`. Esta implementação ainda não declara suporte Windows
+completo: consulte [VALIDATION.md](VALIDATION.md) para distinguir checagem de
+compilação e testes efetivamente executados. O CI contém runners Ubuntu e
+Windows nativos e não publica releases em pushes comuns, PRs ou execução manual
+do CI.
+
+Para compilar no Windows 10/11 x64, instale Rust stable MSVC e Visual Studio
+Build Tools com a carga C++ e Windows SDK, necessária ao SQLite embarcado.
+O executável usa o runtime padrão MSVC
+(VCRUNTIME140/UCRT); instalações standalone podem precisar do
+[Visual C++ Redistributable x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+O FP não instala esses componentes automaticamente.
+No PowerShell, na raiz deste repositório:
+
+```powershell
+rustup target add x86_64-pc-windows-msvc
+cargo check --workspace --locked --target x86_64-pc-windows-msvc
+cargo build --release --locked --target x86_64-pc-windows-msvc
+.\target\x86_64-pc-windows-msvc\release\fp.exe --help
+.\target\x86_64-pc-windows-msvc\release\fp.exe --version
+cargo install --path crates/fp-cli --locked
+```
+
+A instalação Cargo padrão usa `%USERPROFILE%\.cargo\bin`; disponibilize esse
+diretório no PATH do usuário. O FP não pede elevação nem altera o PATH.
+Just 1.39+ e Python 3.14+ são necessários para os templates: `python3` no Linux,
+`python` no Windows, disponíveis no PATH. O Just verifica a disponibilidade do
+interpretador; o diagnóstico do FP também verifica sua versão. Uma instalação
+que oferece apenas o launcher `py` precisa disponibilizar `python.exe` no PATH.
+As receitas usam Python diretamente, sem WSL, Bash ou PowerShell. Justfiles
+existentes permanecem intactos; a portabilidade do template não converte
+comandos POSIX registrados pelo usuário em comandos Windows.
+
+A precedência continua `--root` > `FP_ROOT` > `~/fiap`. O diretório pessoal no
+Windows é o perfil do usuário. Caminhos com unidade, espaços e Unicode devem
+ser passados como argumentos separados, com as aspas normais do terminal:
+
+```powershell
+$env:FP_ROOT = 'D:\Estudos com espaços\fiap'
+fp init
+fp init --check
+fp db init --no-input --output json
+fp db create --engine sqlite --name estudos --no-input --output json
+fp db list --no-input --output json
+```
+
+| Funcionalidade | Linux x86_64 GNU | Windows x86_64 MSVC (implementada, pendente de teste nativo) |
+| --- | --- | --- |
+| Workspace, criação/exclusão, listagem e Just | Disponível | Disponível com ferramentas nativas |
+| SQLite embarcado e comandos JSON sem TTY | Disponível | Disponível, sem Docker |
+| Oracle/MongoDB via Docker CLI | Runtime dedicado ou adoção explícita | Docker Desktop/CLI e contexto do usuário, Linux containers |
+| Bootstrap Docker rootless/systemd | Disponível | Recusado explicitamente |
+| `fp update --check` | Consulta oficial | Consulta oficial |
+| Atualização automática standalone | Instalação Linux reconhecida | Recusada; procedimento manual abaixo |
+
+No Windows, configuração/registro usam `%APPDATA%\fp`, SQLite usa
+`%LOCALAPPDATA%\fp\data` e estado/logs usam `%LOCALAPPDATA%\fp\state`.
+Staging usa o diretório temporário do sistema. Variáveis XDG continuam exclusivas
+do Linux, sem mudar nem migrar seus diretórios. Os argumentos `--config-dir`,
+`--data-dir` e `--state-dir` permitem isolamento explícito em ambos os sistemas.
+Não coloque os dados em Program Files.
+
+A identidade SQLite no Windows combina o volume com o ID de arquivo de 128 bits;
+registros Linux preservam `file_identity` e registros Windows acrescentam
+`windows_file_identity`. Identidade ausente/incompatível, symlinks, reparse points
+e hardlinks impedem execução/exclusão de dados. Não copie registros entre
+sistemas esperando migração automática. No Windows, a exclusão usa o próprio
+handle de arquivo validado; falhas mantêm o registro para diagnóstico.
+
+Os segredos Linux continuam em arquivos 0600/diretório 0700. No Windows, são
+cifrados com DPAPI do usuário, vinculados ao identificador do recurso. Não são
+senhas em texto no JSON nem equivalentes artificiais a chmod. Guarde backup do
+perfil original e dos dados: copiar o arquivo para outro perfil não garante sua
+recuperação. Segredo ausente ou inválido nunca é regenerado para um banco já
+registrado. Variáveis explícitas de senha continuam aceitas.
+
+`fp init` e `fp init --check` no Windows cuidam do workspace, sem instalar Docker,
+baixar imagens Linux ou configurar serviços. `--academic-only` continua aceito.
+`fp db init --setup-runtime` e `--rootless` exigem o runtime exclusivo do Linux;
+use `fp db init` para preparar diretórios no Windows. Docker é opcional e o FP
+preserva o contexto/endpoint do usuário, nomes, portas e volumes, sem modificar
+configurações globais. Um endpoint persistido `unix://` é incompatível com
+Windows e recebe diagnóstico; não há conversão automática nem migração de dados.
+
+Arquivos `.exe`, `.com`, `.cmd` e `.bat` são encontrados no PATH Windows,
+considerando PATHEXT e priorizando `.exe`. Batch usa o suporte nativo de
+`Command`; argumentos com metacaracteres que não podem preservar o contrato
+literal são recusados com orientação para usar `.exe` ou interpretador explícito.
+O dispatcher Python adota a mesma restrição. Symlinks gerados por inicializadores
+só são preservados se internos/relativos; no Windows podem exigir Developer Mode.
+O FP não solicita elevação para criá-los e faz rollback se não puder preservá-los.
+
+### Atualizar manualmente no Windows
+
+`fp update --check` só consulta metadados das releases oficiais. `fp update`
+recusa a instalação automática Windows: a substituição segura de um executável
+em uso ainda não foi implementada. Uma instalação Cargo deve ser atualizada pelo
+mesmo caminho/repositório, acrescentando `--force --locked`. Para instalação
+manual, baixe `fp-vX.Y.Z-x86_64-pc-windows-msvc.zip` e `SHA256SUMS` das
+[releases oficiais](https://github.com/brasga-a/fp/releases), compare o SHA-256
+com `Get-FileHash -Algorithm SHA256`, encerre o FP e preserve uma cópia da
+instalação anterior antes de extrair `fp.exe`. Não sobrescreva arquivos gerenciados
+pelo Cargo ou por outro gerenciador. Ainda não foi publicada uma release Windows
+por esta tarefa.
 
 ## Uso
 
@@ -293,10 +402,12 @@ adicionados manualmente em `commands`; o dispatcher aceita `--task ALVO`.
 A raiz deve fornecer uma receita equivalente ao contrato já existente:
 
 ```just
-set shell := ["sh", "-cu"]
+python := require(if os() == 'windows' { 'python' } else { 'python3' })
+set shell := ['python3', '-c']
+set windows-shell := ['python', '-c']
 set positional-arguments
 run phase chapter *args:
-    @python3 scripts/chapters.py run "$@"
+    @import sys; from scripts.chapters import main; raise SystemExit(main(['run', *sys.argv[2:]]))
 ```
 
 `fp init` fornece esse dispatcher em raízes novas, preservando arquivos existentes.
@@ -308,11 +419,14 @@ O FP delega a execução ao Just e não reinterpreta seus comandos.
 Após confirmação, `.fp-init.lock` impede duas criações simultâneas pelo FP.
 Inicializadores trabalham em diretório temporário fora da árvore acadêmica,
 evitando detecção de workspaces ancestrais. O destino é reservado com criação
-exclusiva; arquivos são movidos, ou copiados entre filesystems. O registro é
+exclusiva; arquivos são copiados com criação exclusiva, inclusive entre filesystems.
+Links relativos internos são preservados; links absolutos/externos, quebrados
+ou tipos especiais são recusados antes da publicação. O registro é
 editado com preservação de comentários e publicado por substituição atômica,
 com verificação de alterações externas. A inclusão no manifesto uv participa do
 rollback se a publicação do registro falhar; alterações concorrentes não são
-sobrescritas. Falhas normais removem somente o novo destino criado pela operação.
+sobrescritas. O rollback remove somente entradas criadas pela operação com identidade
+preservada; arquivos desconhecidos ou alterados são mantidos com diagnóstico.
 Diretórios existentes nunca são substituídos.
 
 O FP configura apenas o workspace uv dos novos capítulos Python. Não cria
@@ -362,7 +476,7 @@ cargo install --path crates/fp-cli --release --locked
 ```
 
 O perfil release usa `opt-level = "s"`, LTO thin e remoção de símbolos. Entrega um
-único ELF nativo, ligado às bibliotecas de sistema normais do Linux. O teste PTY
+único executável nativo: ELF no Linux e PE (`fp.exe`) no Windows MSVC. O teste PTY
 opcional usa somente a biblioteca padrão Python; Python não faz parte do binário.
 Os testes Cargo usam arquivos e inicializadores simulados em diretórios temporários,
 sem inicializar projetos reais ou modificar `~/fiap`.
@@ -633,7 +747,9 @@ conferidos para recusar substituições de identidade. Consultas não criam dire
 
 ### Oracle Free e MongoDB
 
-Execute `fp init` para preparar o Docker rootless e baixar as imagens públicas.
+No Linux, execute `fp init` para preparar o Docker rootless e baixar as imagens públicas.
+No Windows, prepare os diretórios com `fp db init` e disponibilize Docker Desktop
+com Linux containers quando precisar de Oracle/MongoDB.
 Novos bancos recebem senha aleatória local e usuário MongoDB `fp`, sem pedir login.
 Opcionalmente, `--password-env VAR` e `--username` permitem configuração avançada
 ou adoção de recursos existentes, cujas credenciais nunca são redefinidas.
@@ -736,8 +852,8 @@ SHA-256 e tar/gzip. Não há runtime assíncrono.
 
 ## `fp init`: bancos sem sudo ou login repetido
 
-A partir de 0.3.0, `fp init` prepara os arquivos acadêmicos e também o runtime
-de bancos. Baixa os pacotes estáticos oficiais Docker 29.9.2 e rootless extras,
+No Linux, a partir de 0.3.0, `fp init` prepara os arquivos acadêmicos e também
+o runtime de bancos. No Windows, prepara apenas o workspace acadêmico. Baixa os pacotes estáticos oficiais Docker 29.9.2 e rootless extras,
 além de slirp4netns 1.3.7, verificando SHA-256 fixado no código antes de extrair.
 Não baixa nem executa um instalador remoto. O launcher local é o oficial do
 Docker, incluído no pacote verificado.
@@ -749,7 +865,7 @@ Os pacotes ficam em `$XDG_DATA_HOME/fp/runtime/`; imagens e volumes em
 `$XDG_DATA_HOME/fp/docker/`. O socket privado fica em
 `$XDG_RUNTIME_DIR/fp-docker/docker.sock`. A configuração do daemon é própria,
 assim como o diretório de configuração do cliente, sem consultar logins globais.
-Os padrões XDG continuam sendo os documentados acima.
+Os padrões XDG continuam sendo os documentados acima, exclusivamente no Linux.
 
 O setup baixa antecipadamente `gvenzl/oracle-free:23-slim` e `mongo:8.0`, sem
 criar bancos nem containers. Imagens já presentes são reutilizadas, inclusive

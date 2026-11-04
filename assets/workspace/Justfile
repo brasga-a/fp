@@ -1,21 +1,23 @@
-set shell := ["sh", "-cu"]
+# Just >= 1.39. Python é o interpretador das receitas, sem shell POSIX/CMD.
+python := require(if os() == 'windows' { 'python' } else { 'python3' })
+set shell := ['python3', '-c']
+set windows-shell := ['python', '-c']
 set positional-arguments
 
 default: help
 
 # Instruções de utilização.
 help:
-    @python3 scripts/chapters.py help
+    @from scripts.chapters import main; raise SystemExit(main(['help']))
 
 # Capítulos, alvos, comandos e diretórios de trabalho.
 list:
-    @python3 scripts/chapters.py list
+    @from scripts.chapters import main; raise SystemExit(main(['list']))
 
-# Executa o alvo padrão; use --task ALVO para selecionar outro.
+# Executa o alvo padrão; argumentos chegam em sys.argv, sem interpolação.
 run phase chapter *args:
-    @python3 scripts/chapters.py run "$@"
+    @import sys; from scripts.chapters import main; raise SystemExit(main(['run', *sys.argv[2:]]))
 
 # Verifica registro e dispatcher sem executar projetos ou acessar hardware.
 check:
-    @python3 scripts/chapters.py list
-    @python3 -m unittest discover -s tests -v
+    @import subprocess, sys; from scripts.chapters import main; result = main(['list']); raise SystemExit(result or subprocess.call([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v']))

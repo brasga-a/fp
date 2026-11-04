@@ -16,7 +16,9 @@ pub fn discover(parent: &Path, prefix: &str) -> Result<Vec<Entry>> {
     for entry in fs::read_dir(parent)? {
         let entry = entry?;
         // Não atravessar links para outros repositórios.
-        if !entry.file_type()?.is_dir() {
+        if !entry.file_type()?.is_dir()
+            || crate::identity::is_link(&fs::symlink_metadata(entry.path())?)
+        {
             continue;
         }
         let label = entry.file_name().to_string_lossy().into_owned();

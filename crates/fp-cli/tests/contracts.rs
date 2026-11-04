@@ -1,16 +1,19 @@
 use clap::Parser;
+#[cfg(unix)]
+use fiap_projects::processes;
 use fiap_projects::{
     cli::{Cli, Commands},
     create::{Plan, Technology, create},
-    discovery, processes, registry, root, tui,
+    discovery, registry, root, tui,
 };
+#[cfg(unix)]
+use std::os::unix::fs::{PermissionsExt, symlink};
 use std::{
     fs,
-    os::unix::fs::{PermissionsExt, symlink},
     path::{Path, PathBuf},
     process::Command,
 };
-use tempfile::{TempDir, tempdir};
+use tempfile::TempDir;
 
 fn repo() -> TempDir {
     let dir = tempdir().unwrap();
@@ -26,6 +29,7 @@ fn repo() -> TempDir {
     .unwrap();
     dir
 }
+#[cfg(unix)]
 fn script(dir: &Path, name: &str, body: &str) -> PathBuf {
     let path = dir.join(name);
     fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
@@ -161,6 +165,7 @@ fn numbering_and_existing_conventions() {
     assert_eq!(discovery::next(&chapters).unwrap(), 10);
     assert_eq!(discovery::dirname("cap-", 10, &chapters), "cap-010");
     assert_eq!(discovery::dirname("cap-", 1, &[]), "cap-01");
+    #[cfg(unix)]
     symlink(&phases[0].path, dir.path().join("fase-08")).unwrap();
     assert_eq!(discovery::discover(dir.path(), "fase-").unwrap().len(), 2);
     fs::create_dir(dir.path().join("fase-1-duplicate")).unwrap();
@@ -192,6 +197,7 @@ fn conflict_preserves_existing_directory() {
     );
 }
 #[test]
+#[cfg(unix)]
 fn failed_external_initializer_rolls_back() {
     let dir = repo();
     let tools = tempdir().unwrap();
@@ -213,6 +219,7 @@ fn failed_external_initializer_rolls_back() {
     );
 }
 #[test]
+#[cfg(unix)]
 fn successful_native_initializer_registers_real_entrypoint() {
     let dir = repo();
     let tools = tempdir().unwrap();
@@ -293,6 +300,7 @@ fn phase_and_folder_and_sql_do_not_invent_commands() {
     );
 }
 #[test]
+#[cfg(unix)]
 fn new_python_workspace_passes_minimum_version_to_uv() {
     let dir = repo();
     fiap_projects::workspace::initialize(dir.path()).unwrap();
@@ -314,6 +322,7 @@ fn new_python_workspace_passes_minimum_version_to_uv() {
 }
 
 #[test]
+#[cfg(unix)]
 fn python_app_respects_version_and_registers_main() {
     let dir = repo();
     let tools = tempdir().unwrap();
@@ -380,6 +389,7 @@ fn python_app_respects_version_and_registers_main() {
 }
 
 #[test]
+#[cfg(unix)]
 fn python_chapters_in_different_phases_join_one_workspace_with_unique_names() {
     let dir = repo();
     fs::write(dir.path().join("pyproject.toml"), "[project]\nname='fiap-academic'\n[tool.pyright]\nvenvPath='custom'\nvenv='environment'\ntypeCheckingMode='strict'\n").unwrap();
@@ -432,6 +442,7 @@ fn python_chapters_in_different_phases_join_one_workspace_with_unique_names() {
 }
 
 #[test]
+#[cfg(unix)]
 fn python_creation_rolls_back_workspace_when_registry_changes() {
     for existing in [false, true] {
         let dir = repo();
@@ -471,6 +482,7 @@ fn python_creation_rolls_back_workspace_when_registry_changes() {
 }
 
 #[test]
+#[cfg(unix)]
 fn invalid_or_symlinked_python_workspace_is_preserved_before_initializing() {
     for contents in [
         "[tool.uv.workspace]\nmembers = 'invalid'\n",
@@ -505,6 +517,7 @@ fn invalid_or_symlinked_python_workspace_is_preserved_before_initializing() {
     assert_eq!(fs::read_to_string(external).unwrap(), "# preservar\n");
 }
 #[test]
+#[cfg(unix)]
 fn web_only_registers_existing_dev_script() {
     for (manifest, runnable) in [
         (
@@ -529,6 +542,7 @@ fn web_only_registers_existing_dev_script() {
     }
 }
 #[test]
+#[cfg(unix)]
 fn iot_requires_board_and_never_registers_upload() {
     let dir = repo();
     let tools = tempdir().unwrap();
@@ -550,6 +564,7 @@ fn iot_requires_board_and_never_registers_upload() {
     );
 }
 #[test]
+#[cfg(unix)]
 fn absence_of_tools_and_zed() {
     let tools = tempdir().unwrap();
     assert!(processes::find_in("zed", tools.path().as_os_str()).is_none());
@@ -570,6 +585,7 @@ fn absence_of_tools_and_zed() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("just"));
 }
 #[test]
+#[cfg(unix)]
 fn just_delegation_cwd_literal_args_and_exit_code() {
     let dir = repo();
     let tools = tempdir().unwrap();
@@ -609,6 +625,7 @@ fn just_delegation_cwd_literal_args_and_exit_code() {
     assert!(!dir.path().join("unexpected").exists());
 }
 #[test]
+#[cfg(unix)]
 fn signal_exit_status() {
     let tools = tempdir().unwrap();
     let tool = script(tools.path(), "signal", "kill -TERM $$");
@@ -616,6 +633,7 @@ fn signal_exit_status() {
     assert_eq!(processes::code(status), 143);
 }
 #[test]
+#[cfg(unix)]
 fn real_just_in_temporary_repository() {
     let just = processes::find("just").expect("Instale Just para o teste de integração");
     let dir = repo();
@@ -675,6 +693,7 @@ fn registry_rejects_escape_and_invalid_commands() {
     }
 }
 #[test]
+#[cfg(unix)]
 fn failed_registry_publication_removes_only_new_project() {
     let dir = repo();
     let tools = tempdir().unwrap();
@@ -740,6 +759,7 @@ fn technology_uses_registered_interpreter_without_manifest() {
 }
 
 #[test]
+#[cfg(unix)]
 fn cli_preserves_initial_separator_for_project_task_flag() {
     let dir = repo();
     let tools = tempdir().unwrap();
@@ -767,6 +787,7 @@ fn cli_preserves_initial_separator_for_project_task_flag() {
 }
 
 #[test]
+#[cfg(unix)]
 fn python_app_without_main_rolls_back_instead_of_registering_empty_chapter() {
     let dir = repo();
     let tools = tempdir().unwrap();
@@ -781,4 +802,8 @@ fn python_app_without_main_rolls_back_instead_of_registering_empty_chapter() {
         before
     );
     assert!(!dir.path().join(".fp-init.lock").exists());
+}
+
+fn tempdir() -> std::io::Result<TempDir> {
+    tempfile::tempdir_in(std::env::temp_dir().canonicalize()?)
 }

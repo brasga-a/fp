@@ -59,7 +59,7 @@ fn inspect_path(path: &Path, directory: bool, report: &mut Inspection) {
             report.missing.push(path.to_path_buf())
         }
         Err(e) => report.problems.push(format!("{}: {e}", path.display())),
-        Ok(m) if m.is_symlink() => report.problems.push(format!(
+        Ok(m) if crate::identity::is_link(&m) => report.problems.push(format!(
             "{}: link simbólico preservado; resolva este caminho manualmente",
             path.display()
         )),
@@ -127,6 +127,7 @@ pub fn initialize(root: &Path) -> Result<Vec<PathBuf>> {
         .open(&lock_path)
         .map_err(|e| format!("Não foi possível obter .fp-init.lock: {e}"))?;
     let _lock = Lock(lock_path);
+    drop(_file);
     let preflight = inspect(root);
     if !preflight.problems.is_empty() {
         return Err(preflight.problems.join("\n").into());
@@ -170,7 +171,7 @@ pub struct Tool {
 pub fn tools(path: &OsStr, home: Option<&OsStr>) -> Vec<Tool> {
     let specs: &[(&str, &[&str], bool)] = &[
         ("Just", &["just"], true),
-        ("Python 3.14+", &["python3"], true),
+        ("Python 3.14+", &[python_name()], true),
         ("Python / uv", &["uv"], false),
         ("Vite+", &["vp"], false),
         ("Rust / Cargo", &["cargo"], false),
@@ -179,12 +180,22 @@ pub fn tools(path: &OsStr, home: Option<&OsStr>) -> Vec<Tool> {
         ("Docker (db)", &["docker"], false),
         ("SQLite (db)", &["sqlite3"], false),
     ];
+    #[cfg(unix)]
     let mut candidates = vec![PathBuf::from("/usr/local/bin"), PathBuf::from("/usr/bin")];
+    #[cfg(windows)]
+    let mut candidates = Vec::new();
     if let Some(home) = home {
-        candidates.insert(0, PathBuf::from(home).join(".local/bin"));
-        candidates.insert(1, PathBuf::from(home).join(".cargo/bin"));
-        candidates.insert(2, PathBuf::from(home).join(".local/share/vite-plus/bin"));
-        candidates.insert(3, PathBuf::from(home).join(".platformio/penv/bin"));
+        for (index, relative) in [
+            ".local/bin",
+            ".cargo/bin",
+            ".local/share/vite-plus/bin",
+            platformio_bin(),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            candidates.insert(index, PathBuf::from(home).join(relative));
+        }
     }
     let candidate_path = std::env::join_paths(candidates).unwrap_or_default();
     specs
@@ -222,4 +233,25 @@ pub fn python_supported(python: &Path) -> bool {
         .unwrap_or("")
         .split('.');
     matches!((parts.next().and_then(|s| s.parse::<u32>().ok()), parts.next().and_then(|s| s.parse::<u32>().ok())), (Some(3), Some(minor)) if minor >= 14)
+}
+
+fn python_name() -> &'static str {
+    #[cfg(windows)]
+    {
+        "python"
+    }
+    #[cfg(unix)]
+    {
+        "python3"
+    }
+}
+fn platformio_bin() -> &'static str {
+    #[cfg(windows)]
+    {
+        ".platformio/penv/Scripts"
+    }
+    #[cfg(unix)]
+    {
+        ".platformio/penv/bin"
+    }
 }

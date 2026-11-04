@@ -4,6 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub fn home() -> Option<PathBuf> {
+    std::env::home_dir()
+}
+
 /// Resolve também raízes ainda inexistentes, usadas por fp init.
 pub fn locate(
     explicit: Option<&Path>,
@@ -15,7 +19,7 @@ pub fn locate(
         .or_else(|| env.map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("~/fiap"));
     let path = if selected == Path::new("~") || selected.starts_with("~/") {
-        let home = home.ok_or("HOME não definido; informe --root")?;
+        let home = home.ok_or("Diretório pessoal indisponível; informe --root")?;
         PathBuf::from(home).join(selected.strip_prefix("~")?)
     } else {
         selected

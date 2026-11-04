@@ -5,6 +5,8 @@ import os
 import re
 import shlex
 import sys
+import shutil
+import subprocess
 import tomllib
 
 
@@ -127,7 +129,20 @@ def main(args=None, root=ROOT):
         cwd = directory(directory(root, chapter["path"]), command.get("cwd", "."))
         os.chdir(cwd)
         # Substituir o dispatcher preserva exit status, sinais e terminal interativo.
-        os.execvp(command["argv"][0], command["argv"] + extra)
+        argv = command["argv"] + extra
+        if os.name == "nt":
+            # execvp no Windows não substitui o processo como no Unix. Aguarde
+            # explicitamente para que Just observe o exit code do comando.
+            executable = shutil.which(argv[0])
+            if executable is None:
+                raise FileNotFoundError(2, "Ferramenta ausente", argv[0])
+            if Path(executable).suffix.lower() in {".cmd", ".bat"}:
+                # Batch usa parsing de CMD mesmo com shell=False. Rejeite entradas
+                # cuja expansão não pode preservar o contrato literal com segurança.
+                if any(any(c in arg for c in '\r\n"%!?^&|<>()') for arg in [executable, *argv[1:]]):
+                    raise ConfigError("Argumento incompatível com execução segura de .cmd/.bat; registre o executável .exe ou interpretador com argv explícito.")
+            return subprocess.call([executable, *argv[1:]])
+        os.execvp(argv[0], argv)
     except (ConfigError, OSError, tomllib.TOMLDecodeError) as error:
         print(f"Erro: {error}", file=sys.stderr)
         missing_tool = isinstance(error, FileNotFoundError) and error.filename != str(root / "chapters.toml")

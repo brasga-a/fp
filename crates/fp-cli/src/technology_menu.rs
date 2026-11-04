@@ -153,6 +153,7 @@ pub fn select() -> Result<Choice> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use std::{fs, os::unix::fs::PermissionsExt};
 
     #[test]
@@ -179,6 +180,7 @@ mod tests {
         assert_eq!(next(&items, 5, true), 5);
     }
     #[test]
+    #[cfg(unix)]
     fn only_executable_tools_on_path_enable_their_technology() {
         let dir = tempfile::tempdir().unwrap();
         for name in ["uv", "vp", "cargo", "platformio"] {
@@ -205,6 +207,7 @@ mod tests {
         assert_eq!(next(&items, 2, false), 0);
     }
     #[test]
+    #[cfg(unix)]
     fn pio_alias_and_broken_symlink_detection() {
         let dir = tempfile::tempdir().unwrap();
         let pio = dir.path().join("pio");
