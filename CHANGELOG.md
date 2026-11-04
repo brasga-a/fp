@@ -33,6 +33,8 @@ As mudanças do FP seguem a política de versionamento semântico descrita em
 
 ### Corrigido
 
+- Resolução de caminhos Windows aguarda a raiz completa antes de consultar
+  prefixos de unidade/verbatim, evitando o erro nativo "Incorrect function".
 - Publicação de projetos entre filesystems usa criação exclusiva e rollback por
   identidade, preservando entradas concorrentes. Links externos e tipos especiais
   são recusados e symlinks internos são preservados quando a plataforma permite.

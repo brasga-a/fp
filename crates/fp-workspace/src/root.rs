@@ -32,6 +32,9 @@ pub fn locate(
     let mut normalized = PathBuf::new();
     for component in absolute.components() {
         match component {
+            // Um prefixo Windows isolado (especialmente \\?\C:) ainda não é
+            // um caminho consultável. Aguarde RootDir antes de acessar o disco.
+            std::path::Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
             std::path::Component::ParentDir => {
                 normalized.pop();
             }
@@ -62,4 +65,22 @@ pub fn resolve(
     }
     crate::registry::load(&root)?;
     Ok(root)
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drive_and_verbatim_prefixes_are_not_queried_before_root() {
+        let directory = tempfile::tempdir().unwrap();
+        let canonical = directory.path().canonicalize().unwrap();
+        for path in [directory.path().to_path_buf(), canonical.clone()] {
+            assert_eq!(locate(Some(&path), None, None).unwrap(), canonical);
+            assert_eq!(
+                locate(Some(&path.join("ação com espaços")), None, None).unwrap(),
+                canonical.join("ação com espaços")
+            );
+        }
+    }
 }

@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.14'
@@ -61,7 +61,7 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --locked --all-targets --target ${{ matrix.target }} -- -D warnings
       - name: Testes nativos
-        run: cargo test --workspace --locked --target ${{ matrix.target }}
+        run: cargo test --workspace --locked --no-fail-fast --target ${{ matrix.target }}
       - name: Testes dos templates e da distribuição
         run: |
           python -m unittest discover -s assets/workspace/tests -v

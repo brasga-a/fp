@@ -72,6 +72,18 @@ DPAPI real, comportamento de arquivos NTFS e terminal Windows **não foram
 executados**. A configuração de CI, os testes com respostas HTTP simuladas e a
 checagem cruzada não substituem esses resultados.
 
+### Primeira execução nativa no Actions
+
+A execução [41894434598](https://github.com/brasga-a/fp/actions/runs/41894434598),
+no commit `1edeb96`, passou integralmente no Ubuntu. No Windows Server 2025,
+Rust 1.99.1 e Python 3.14.10, fmt/check/Clippy passaram; três testes do contrato
+acadêmico falharam com "Incorrect function" na resolução da raiz. A causa foi
+consultar um prefixo Windows isolado antes de acrescentar RootDir. O ajuste
+preserva a normalização Unix e acrescenta regressão Windows para caminhos
+normais/verbatim e destinos Unicode inexistentes. A suíte permanece ativa; o
+CI usa --no-fail-fast para coletar resultados de todos os crates numa execução.
+Os testes e artefatos Windows continuam pendentes da execução desse ajuste.
+
 ## Implementação e limites
 
 | Domínio | API/diferença tratada |
