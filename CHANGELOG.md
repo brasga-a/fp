@@ -5,6 +5,32 @@ As mudanças do FP seguem a política de versionamento semântico descrita em
 
 ## [Unreleased]
 
+## 0.4.1 — 2026-11-04
+
+### Corrigido
+
+- Manifestos Python novos informam ao Pyright/Basedpyright onde encontrar a
+  `.venv` compartilhada, por caminhos relativos à raiz e ao capítulo. Imports
+  de dependências como NumPy são resolvidos também ao abrir somente o capítulo
+  no Zed. Configurações personalizadas do analisador são preservadas.
+
+## 0.4.0 — 2026-11-04
+
+### Adicionado
+
+- Capítulos Python criados pelo FP entram no workspace uv da raiz e compartilham
+  `.venv`, `uv.lock` e dependências. Nomes incluem fase e capítulo para evitar
+  colisões entre fases. O novo template declara um workspace vazio.
+
+### Alterado
+
+- Novos alvos Python usam `uv run --all-packages main.py`, incluindo dependências
+  da raiz e dos membros. Projetos antigos continuam preservados, sem migração
+  automática. Criação não instala pacotes nem cria ambientes ou lockfiles.
+- Criação e exclusão atualizam os membros explícitos no manifesto uv com
+  preservação de configurações, detecção de edição concorrente e rollback em
+  falhas de publicação do registro. Exclusão preserva o ambiente compartilhado.
+
 ### Corrigido
 
 - Workflow seleciona Python 3.11 para os testes acadêmicos no Ubuntu 22.04.

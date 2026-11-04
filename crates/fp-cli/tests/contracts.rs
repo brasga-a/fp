@@ -298,7 +298,7 @@ fn python_app_respects_version_and_registers_main() {
     let tools = tempdir().unwrap();
     fs::write(
         dir.path().join("pyproject.toml"),
-        "[project]\nrequires-python = '>=3.11'",
+        "# preservar configuração\n[project]\nname = 'fiap-academic'\nrequires-python = '>=3.11'\ndependencies = ['numpy>=2']\n[tool.uv]\npackage = false\n[tool.custom]\nenabled = true\n",
     )
     .unwrap();
     let tool = script(
@@ -308,7 +308,7 @@ fn python_app_respects_version_and_registers_main() {
     );
     let plan = plan(dir.path(), Technology::Python, Some(tool));
     let command = create(dir.path(), &plan, true).unwrap().unwrap();
-    assert_eq!(command, ["uv", "run", "main.py"]);
+    assert_eq!(command, ["uv", "run", "--all-packages", "main.py"]);
     assert!(plan.target.join("main.py").is_file());
     let doc = registry::load(dir.path()).unwrap();
     assert!(registry::executable(&doc, "1.1"));
@@ -325,12 +325,163 @@ fn python_app_respects_version_and_registers_main() {
         "--no-package",
         "--no-workspace",
         "--no-python-downloads",
-        "--name\ncap-01\n",
+        "--name\nfase-01-cap-01\n",
         ">=3.11",
     ] {
         assert!(args.contains(expected));
     }
     assert!(!plan.target.join(".venv").exists());
+    let root = fs::read_to_string(dir.path().join("pyproject.toml")).unwrap();
+    assert!(root.contains("# preservar configuração"));
+    let root = root.parse::<toml_edit::DocumentMut>().unwrap();
+    assert_eq!(
+        root["tool"]["uv"]["workspace"]["members"][0].as_str(),
+        Some("fase-01/cap-01")
+    );
+    assert_eq!(
+        root["project"]["dependencies"][0].as_str(),
+        Some("numpy>=2")
+    );
+    assert_eq!(root["tool"]["custom"]["enabled"].as_bool(), Some(true));
+    assert_eq!(root["tool"]["pyright"]["venvPath"].as_str(), Some("."));
+    assert_eq!(root["tool"]["pyright"]["venv"].as_str(), Some(".venv"));
+    let member = fs::read_to_string(plan.target.join("pyproject.toml"))
+        .unwrap()
+        .parse::<toml_edit::DocumentMut>()
+        .unwrap();
+    assert_eq!(member["project"]["name"].as_str(), Some("fase-01-cap-01"));
+    assert_eq!(member["tool"]["uv"]["package"].as_bool(), Some(false));
+    assert_eq!(
+        member["tool"]["pyright"]["venvPath"].as_str(),
+        Some("../..")
+    );
+    assert_eq!(member["tool"]["pyright"]["venv"].as_str(), Some(".venv"));
+}
+
+#[test]
+fn python_chapters_in_different_phases_join_one_workspace_with_unique_names() {
+    let dir = repo();
+    fs::write(dir.path().join("pyproject.toml"), "[project]\nname='fiap-academic'\n[tool.pyright]\nvenvPath='custom'\nvenv='environment'\ntypeCheckingMode='strict'\n").unwrap();
+    let tools = tempdir().unwrap();
+    let uv = script(
+        tools.path(),
+        "uv",
+        "echo '[project]' > pyproject.toml\necho 'print(42)' > main.py",
+    );
+    let first = plan(dir.path(), Technology::Python, Some(uv.clone()));
+    create(dir.path(), &first, true).unwrap();
+    fs::create_dir(dir.path().join("fase-02")).unwrap();
+    let second = Plan {
+        target: dir.path().join("fase-02/cap-01"),
+        chapter: Some((2, 1)),
+        tool: Some(uv),
+        ..first
+    };
+    create(dir.path(), &second, true).unwrap();
+    let root = fs::read_to_string(dir.path().join("pyproject.toml"))
+        .unwrap()
+        .parse::<toml_edit::DocumentMut>()
+        .unwrap();
+    let members = root["tool"]["uv"]["workspace"]["members"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        members
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["fase-01/cap-01", "fase-02/cap-01"]
+    );
+    let member = fs::read_to_string(second.target.join("pyproject.toml"))
+        .unwrap()
+        .parse::<toml_edit::DocumentMut>()
+        .unwrap();
+    assert_eq!(member["project"]["name"].as_str(), Some("fase-02-cap-01"));
+    assert_eq!(root["tool"]["pyright"]["venvPath"].as_str(), Some("custom"));
+    assert_eq!(
+        root["tool"]["pyright"]["venv"].as_str(),
+        Some("environment")
+    );
+    assert_eq!(
+        root["tool"]["pyright"]["typeCheckingMode"].as_str(),
+        Some("strict")
+    );
+    assert!(!dir.path().join(".venv").exists());
+    assert!(!dir.path().join("uv.lock").exists());
+}
+
+#[test]
+fn python_creation_rolls_back_workspace_when_registry_changes() {
+    for existing in [false, true] {
+        let dir = repo();
+        let config = dir.path().join("pyproject.toml");
+        let before = "# manter\n[project]\nname='fiap-academic'\ndependencies=[]\n";
+        if existing {
+            fs::write(&config, before).unwrap();
+        }
+        let tools = tempdir().unwrap();
+        let uv = script(
+            tools.path(),
+            "uv",
+            &format!(
+                "echo '[project]' > pyproject.toml\necho 'print(42)' > main.py\necho '# edição concorrente' >> '{}'",
+                dir.path().join("chapters.toml").display()
+            ),
+        );
+        let plan = plan(dir.path(), Technology::Python, Some(uv));
+        assert!(
+            create(dir.path(), &plan, true)
+                .unwrap_err()
+                .to_string()
+                .contains("Registro alterado")
+        );
+        assert!(!plan.target.exists());
+        if existing {
+            assert_eq!(fs::read_to_string(&config).unwrap(), before);
+        } else {
+            assert!(!config.exists());
+        }
+        assert!(
+            fs::read_to_string(dir.path().join("chapters.toml"))
+                .unwrap()
+                .contains("# edição concorrente")
+        );
+    }
+}
+
+#[test]
+fn invalid_or_symlinked_python_workspace_is_preserved_before_initializing() {
+    for contents in [
+        "[tool.uv.workspace]\nmembers = 'invalid'\n",
+        "[tool.uv.workspace]\nmembers = [42]\n",
+        "[tool.uv.workspace]\nmembers = []\nexclude = ['fase-*']\n",
+        "[tool]\nuv = false\n",
+    ] {
+        let dir = repo();
+        fs::write(dir.path().join("pyproject.toml"), contents).unwrap();
+        let tools = tempdir().unwrap();
+        let uv = script(tools.path(), "uv", "exit 99");
+        let plan = plan(dir.path(), Technology::Python, Some(uv));
+        assert!(create(dir.path(), &plan, true).is_err());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("pyproject.toml")).unwrap(),
+            contents
+        );
+        assert!(!plan.target.exists());
+    }
+    let dir = repo();
+    let outside = tempdir().unwrap();
+    let external = outside.path().join("pyproject.toml");
+    fs::write(&external, "# preservar\n").unwrap();
+    symlink(&external, dir.path().join("pyproject.toml")).unwrap();
+    let plan = plan(dir.path(), Technology::Python, None);
+    assert!(
+        create(dir.path(), &plan, true)
+            .unwrap_err()
+            .to_string()
+            .contains("sem links")
+    );
+    assert_eq!(fs::read_to_string(external).unwrap(), "# preservar\n");
 }
 #[test]
 fn web_only_registers_existing_dev_script() {

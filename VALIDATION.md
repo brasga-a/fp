@@ -1,3 +1,59 @@
+# Validação — 2026-11-04 (FP 0.4.1)
+
+Reproduzido o diagnóstico `Import "numpy" could not be resolved` usando o
+Basedpyright 1.40.2 instalado pelo Zed, com apenas a pasta do capítulo como raiz.
+O NumPy já estava instalado na `.venv` compartilhada; faltava indicar esse
+ambiente ao analisador. A raiz e os capítulos novos recebem `tool.pyright`
+com `venvPath` relativo e `venv = ".venv"`, preservando configurações existentes.
+
+- `cargo fmt --all --check`, Clippy com `-D warnings`, 97 testes Rust e 11 testes
+  Python do dispatcher passaram, com Cargo offline e lockfile preservado.
+- Build release validado; instalação Cargo mantém o prefixo `~/.local`.
+- Após o ajuste local autorizado nos dois manifestos, o mesmo Basedpyright
+  analisou o `main.py` existente pela raiz e pela pasta do capítulo: zero erros,
+  zero avisos e nenhuma regra de diagnóstico desabilitada.
+- Não houve alteração no código do exercício ou nas configurações globais do
+  editor. Os manifestos anteriores foram preservados em backup no estado do FP.
+
+O editor aberto pode precisar reiniciar o servidor de linguagem para descartar
+o ambiente anterior. No Zed, a ação é `editor: restart language server`.
+
+# Validação — 2026-11-04 (FP 0.4.0)
+
+Capítulos Python passam a ser membros explícitos do workspace uv da raiz. A
+criação usa nomes distintos por fase; os comandos incluem `--all-packages` para
+disponibilizar as dependências da raiz e dos membros no ambiente compartilhado.
+
+| Verificação | Resultado |
+| --- | --- |
+| `cargo fmt --all --check` | Passou |
+| `cargo clippy --workspace --all-targets --locked --offline -- -D warnings` | Passou |
+| `cargo test --workspace --locked --offline` | 97 testes Rust passaram; nenhum ignorado; dispatcher gerado passou 11 testes Python |
+| `cargo build --release --locked --offline` | Passou |
+| `python3 tools/check_tui.py target/release/fp` | 13 cenários PTY passaram |
+| `python3 tools/check_delete_tui.py target/release/fp` | 5 cenários PTY passaram |
+| `python3 tools/check_database_tui.py target/release/fp` | 5 cenários PTY passaram |
+| `target/release/fp --version` e `fp --version` no PATH após instalação Cargo | `fp 0.4.0` |
+
+Os testes usam diretórios temporários e inicializadores simulados. Cobrem nomes
+de capítulos repetidos entre fases, preservação de dependências e comentários,
+registro de membros Python, cancelamento, configurações inválidas, links,
+remoção de membros ao excluir capítulos/fases e rollback em falhas ou edições
+concorrentes. Não inicializam projetos reais nem acessam o repositório acadêmico.
+
+Após os testes, a migração explicitamente solicitada foi aplicada ao repositório
+acadêmico existente. A sincronização uv offline incluiu raiz e capítulo; a
+verificação dentro do capítulo confirmou `sys.prefix` em `~/fiap/.venv`, importou
+NumPy 2.5.4 e executou `fp run 3 3` com sucesso. O hash de `main.py` permaneceu
+idêntico. Configurações, lockfiles e o ambiente antigo do capítulo foram
+preservados em backup no diretório de estado do FP. Isso foi uma migração local
+autorizada, separada da suíte automatizada.
+
+Projetos antigos não são migrados automaticamente pelo CLI. Workspaces com
+exclusões personalizadas precisam ser revisados antes de criar novos membros
+pelo FP. O uv resolve versões em conjunto; dependências incompatíveis entre
+capítulos exigem ajustes nos requisitos.
+
 # Validação — 2026-11-01
 
 Ambiente: Linux x86_64, Rust stable 1.99.1. Como Rust não estava instalado,

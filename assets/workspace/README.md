@@ -1,8 +1,8 @@
 # Workspace acadêmico FIAP
 
-Projetos e materiais organizados por fases e capítulos. Cada projeto mantém os
-manifests e lockfiles do seu ecossistema junto ao código. Não há workspace de
-pacotes compartilhado criado automaticamente.
+Projetos e materiais organizados por fases e capítulos. Capítulos Python criados
+pelo FP são membros do workspace uv da raiz e compartilham `.venv` e `uv.lock`.
+Outras tecnologias mantêm os manifests e lockfiles junto ao código.
 
 ```text
 AGENTS.md              orientações para agentes
@@ -45,11 +45,33 @@ PlatformIO são necessários apenas para os projetos correspondentes. Zed é opc
 ## Registro de execução
 
 `fp create` registra comandos quando o inicializador fornece um entrypoint real.
-Python usa `main.py` e `uv run main.py`. Pastas e materiais sem entrypoint não
+Python usa `main.py` e `uv run --all-packages main.py`. Pastas e materiais sem entrypoint não
 recebem comandos fictícios. Para registrar um projeto já existente, declare seu
 caminho e `commands.ALVO.argv` em `chapters.toml`; `default` seleciona o alvo padrão.
 Um alvo pode ter `cwd` relativo ao capítulo. Só registre diretórios e arquivos reais.
 Os argumentos são repassados sem interpretação pelo shell.
+
+## Dependências Python compartilhadas
+
+Na raiz, adicione bibliotecas com `uv add numpy`, substituindo `numpy` pela
+biblioteca desejada. De qualquer pasta, use `uv add --project ~/fiap numpy`,
+adaptando o caminho à raiz configurada. `fp run FASE CAPITULO` inclui as
+dependências da raiz e de todos os membros. Para executar diretamente dentro de
+um capítulo, use `uv run --all-packages main.py`; para sincronizar tudo a partir
+da raiz, `uv sync --all-packages`.
+
+O FP registra cada novo capítulo Python em `tool.uv.workspace.members`, com
+nome único como `fase-01-cap-01`. Não instala dependências durante a criação.
+O uv cria ou atualiza `.venv` e `uv.lock` na raiz quando necessário. Requisitos
+de versões devem ser compatíveis entre os capítulos. Projetos antigos não são
+migrados automaticamente. Ao excluir um capítulo ou fase, o FP remove seus
+membros explícitos do manifesto, preservando as dependências compartilhadas.
+
+Os manifestos também indicam a `.venv` da raiz ao Pyright/Basedpyright por
+caminhos relativos, permitindo abrir só um capítulo no Zed sem perder a
+resolução de imports. Após migrar um projeto já aberto, reinicie o servidor
+de linguagem (`editor: restart language server` no Zed). Configurações
+personalizadas do analisador são preservadas.
 
 Guarde PDFs e anotações em `docs/`, preservando os originais. Fases e capítulos de
 código são criados por demanda; `fp init` não inventa projetos acadêmicos.

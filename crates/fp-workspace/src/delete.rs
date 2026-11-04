@@ -1,4 +1,4 @@
-use crate::{Result, discovery, registry};
+use crate::{Result, discovery, python_workspace, registry};
 use std::{
     fs,
     os::unix::fs::MetadataExt,
@@ -14,6 +14,7 @@ pub struct Plan {
     before: String,
     after: DocumentMut,
     identity: (u64, u64),
+    python: Option<python_workspace::Change>,
 }
 
 impl Plan {
@@ -63,6 +64,7 @@ pub fn prepare(root: &Path, phase: u32, chapter: Option<u32>) -> Result<Plan> {
     for key in &registrations {
         chapters.remove(key);
     }
+    let python = python_workspace::Change::remove(&root, &target)?;
     Ok(Plan {
         target,
         registrations,
@@ -70,6 +72,7 @@ pub fn prepare(root: &Path, phase: u32, chapter: Option<u32>) -> Result<Plan> {
         before,
         after,
         identity: (metadata.dev(), metadata.ino()),
+        python,
     })
 }
 
@@ -117,7 +120,21 @@ pub fn execute(plan: &Plan, confirmed: bool) -> Result<()> {
 
 fn finish(plan: &Plan, staging: &Path) -> Result<()> {
     let moved = staging.join("project");
-    if let Err(error) = registry::save(&plan.root, &plan.before, &plan.after) {
+    let publish = (|| -> Result<()> {
+        if let Some(change) = &plan.python {
+            change.apply(&plan.root)?;
+        }
+        if let Err(error) = registry::save(&plan.root, &plan.before, &plan.after) {
+            if let Some(change) = &plan.python {
+                change
+                    .rollback(&plan.root)
+                    .map_err(|rollback| format!("{error}; {rollback}"))?;
+            }
+            return Err(error);
+        }
+        Ok(())
+    })();
+    if let Err(error) = publish {
         // Não sobrescrever uma pasta criada por outro processo durante a operação.
         if fs::symlink_metadata(&plan.target).is_ok() {
             return Err(format!(
@@ -156,6 +173,8 @@ mod tests {
         fs::create_dir(root.path().join("fase-01")).unwrap();
         fs::write(root.path().join("fase-01/original"), "keep").unwrap();
         fs::write(root.path().join("chapters.toml"), "[chapters]\n").unwrap();
+        let config = "# preservar dependências\n[tool.uv.workspace]\nmembers=['fase-01']\n";
+        fs::write(root.path().join("pyproject.toml"), config).unwrap();
         let plan = prepare(root.path(), 1, None).unwrap();
         let staging = tempfile::tempdir_in(root.path()).unwrap().keep();
         fs::rename(&plan.target, staging.join("project")).unwrap();
@@ -166,6 +185,10 @@ mod tests {
             "keep"
         );
         assert!(!staging.exists());
+        assert_eq!(
+            fs::read_to_string(root.path().join("pyproject.toml")).unwrap(),
+            config
+        );
     }
 
     #[test]

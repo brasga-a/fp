@@ -194,3 +194,58 @@ fn registry_aliases_inside_deleted_directory_are_removed() {
             .is_none()
     );
 }
+
+#[test]
+fn deleting_python_chapter_or_phase_updates_only_its_workspace_members() {
+    for chapter in [Some(1), None] {
+        let dir = repo();
+        let config = dir.path().join("pyproject.toml");
+        fs::write(&config, "# manter\n[project]\ndependencies=['numpy']\n[tool.uv.workspace]\nmembers=['fase-01/cap-01', 'fase-01/cap-02', 'fase-02/cap-01']\n").unwrap();
+        let plan = delete::prepare(dir.path(), 1, chapter).unwrap();
+        let before = fs::read_to_string(&config).unwrap();
+        delete::execute(&plan, false).unwrap();
+        assert_eq!(fs::read_to_string(&config).unwrap(), before);
+        delete::execute(&plan, true).unwrap();
+        let text = fs::read_to_string(&config).unwrap();
+        assert!(text.contains("# manter"));
+        let doc = text.parse::<toml_edit::DocumentMut>().unwrap();
+        let members = doc["tool"]["uv"]["workspace"]["members"]
+            .as_array()
+            .unwrap();
+        assert_eq!(
+            members
+                .iter()
+                .map(|v| v.as_str().unwrap())
+                .collect::<Vec<_>>(),
+            if chapter.is_some() {
+                vec!["fase-01/cap-02", "fase-02/cap-01"]
+            } else {
+                vec!["fase-02/cap-01"]
+            }
+        );
+        assert_eq!(doc["project"]["dependencies"][0].as_str(), Some("numpy"));
+    }
+}
+
+#[test]
+fn workspace_changed_after_confirmation_restores_chapter_without_overwriting_edits() {
+    let dir = repo();
+    let config = dir.path().join("pyproject.toml");
+    fs::write(&config, "[tool.uv.workspace]\nmembers=['fase-01/cap-01']\n").unwrap();
+    let plan = delete::prepare(dir.path(), 1, Some(1)).unwrap();
+    let changed = "# outra edição\n[tool.uv.workspace]\nmembers=['fase-01/cap-01']\n";
+    fs::write(&config, changed).unwrap();
+    let before_registry = fs::read_to_string(dir.path().join("chapters.toml")).unwrap();
+    assert!(
+        delete::execute(&plan, true)
+            .unwrap_err()
+            .to_string()
+            .contains("pyproject.toml alterado")
+    );
+    assert!(dir.path().join("fase-01/cap-01/original").is_file());
+    assert_eq!(fs::read_to_string(&config).unwrap(), changed);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("chapters.toml")).unwrap(),
+        before_registry
+    );
+}

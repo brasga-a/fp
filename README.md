@@ -87,7 +87,9 @@ de templates em tempo de execução.
 
 A operação é idempotente: mantém arquivos existentes byte a byte e completa
 apenas os ausentes. Não cria fases, capítulos, `.venv`, Git, lockfiles de pacotes,
-workspaces Cargo/uv/JavaScript ou credenciais. Use `fp create` para criar projetos.
+workspaces Cargo/JavaScript ou credenciais. O novo manifesto Python declara um
+workspace uv vazio; `fp create` acrescenta os capítulos Python como membros.
+Manifestos existentes não são migrados por `fp init`.
 Conflitos de tipo, links em caminhos gerenciados, TOML inválido e referências a
 capítulos inexistentes são reportados sem sobrescrever nem recriar projetos.
 O conteúdo de Justfiles personalizados e instruções existentes é preservado;
@@ -127,8 +129,9 @@ Não usa tela alternativa nem menus numerados de stdin.
 6. Ao terminar, escolha se deseja abrir a pasta no Zed.
 
 Não há pergunta de nome livre. Por exemplo, Fase → 3 gera `fase-03`;
-Capítulo → fase 3 → 2 gera `fase-03/cap-02`. O nome registrado e o nome passado
-a uv/Cargo vêm do diretório gerado. Uma fase cria somente uma pasta.
+Capítulo → fase 3 → 2 gera `fase-03/cap-02`. O registro mantém `cap-02`; o projeto
+Python recebe `fase-03-cap-02`, e o projeto Cargo recebe `cap-02`.
+Uma fase cria somente uma pasta.
 `fp create` cria projetos. `fp init` prepara e verifica o workspace acadêmico.
 
 A numeração sugerida é o maior número existente + 1; você pode informar outro
@@ -139,7 +142,9 @@ A descoberta segue `fase-NN/cap-NN`, com ordenação numérica. Novos nomes cont
 somente prefixo e número, sem sufixos descritivos. A largura existente é preservada
 (por exemplo, `cap-009` leva a `cap-010`), com dois dígitos por padrão. Diretórios
 antigos com sufixos continuam reconhecidos, sem renomeação. O capítulo recebe o
-nome gerado em `chapters.toml`. Uma fase não ganha metadados extras.
+nome gerado em `chapters.toml`. O nome do projeto Python inclui a fase, por exemplo
+`fase-03-cap-02`, para permitir capítulos com o mesmo número em fases diferentes.
+Uma fase não ganha metadados extras.
 `docs/fase-NN` contém materiais e não conta como fase de projetos.
 Numerações duplicadas são reportadas como ambíguas; links de diretórios não são
 atravessados na descoberta.
@@ -148,20 +153,50 @@ atravessados na descoberta.
 
 | Opção | Inicialização | Execução registrada |
 | --- | --- | --- |
-| Python | `uv init --app --no-package --no-workspace --vcs none …` | `uv run main.py` |
+| Python | `uv init --app --no-package --no-workspace --vcs none …`, seguido de registro no workspace da raiz | `uv run --all-packages main.py` |
 | TypeScript / JavaScript | `vp create vite:application --directory . --no-git` | `vp run dev --` se existir script `dev` |
 | Rust | `cargo init --bin --vcs none --name cap-01 .` | `cargo run --` se existirem manifest e `src/main.rs` |
 | ESP32 / IoT | `pio project init --board BOARD` | Nenhuma operação de hardware automática |
 | SQL / Database | Pasta `sql/` vazia | Nenhum |
 | Somente pasta | Diretório vazio | Nenhum |
 
-Python cria uma aplicação simples pelo uv (`--app --no-package`), com `pyproject.toml` e `main.py`, sem criar
-`.venv` ou workspace durante a inicialização. O `requires-python` do
-`pyproject.toml` da raiz é passado ao uv; downloads implícitos de Python e
-pinagem de versão ficam desativados. O alvo `main` é registrado automaticamente
-como `uv run main.py`, permitindo `fp run FASE CAPITULO` imediatamente após a
-criação. Se o inicializador terminar sem gerar `main.py`, o FP cancela a
-publicação com erro, sem registrar um capítulo incompleto.
+Python cria uma aplicação simples pelo uv (`--app --no-package`), com
+`pyproject.toml` e `main.py`. O FP adiciona o caminho exato do capítulo em
+`tool.uv.workspace.members` no manifesto da raiz, preservando dependências,
+comentários e configurações existentes. Sem manifesto na raiz, cria a configuração
+acadêmica padrão. Só capítulos Python são incluídos; fases podem conter outras
+tecnologias. Exclusões personalizadas no workspace requerem revisão manual antes
+da criação, sem sobrescrever a configuração do usuário.
+
+O `requires-python` da raiz é passado ao uv; downloads implícitos de Python e
+pinagem de versão ficam desativados. A criação não instala dependências nem cria
+ambientes ou lockfiles. Na execução, uv usa uma única `.venv` e `uv.lock` na raiz.
+O alvo `main` usa `uv run --all-packages main.py`, incluindo as dependências da
+raiz e de todos os membros, mesmo quando o comando parte da pasta do capítulo.
+Se o inicializador não gerar `main.py` ou um manifesto válido, a criação falha
+sem publicar um capítulo incompleto.
+
+Para adicionar uma biblioteca disponível aos capítulos Python:
+
+```sh
+uv add --project ~/fiap numpy
+fp run 3 2
+```
+
+Use a raiz configurada em lugar de `~/fiap` quando houver `--root` ou `FP_ROOT`.
+Para sincronizar todas as dependências manualmente, use
+`uv sync --project ~/fiap --all-packages`; dentro de um capítulo,
+`uv run --all-packages main.py`. Requisitos incompatíveis entre capítulos precisam
+ser conciliados, pois o workspace tem uma resolução compartilhada. Consulte a
+[documentação de workspaces do uv](https://docs.astral.sh/uv/concepts/projects/workspaces/).
+Projetos Python antigos e seus comandos não são migrados automaticamente.
+
+Os manifestos novos incluem `tool.pyright.venvPath` e `tool.pyright.venv`, com
+caminhos relativos para a `.venv` compartilhada. Assim, Pyright/Basedpyright
+resolvem imports mesmo ao abrir só a pasta do capítulo no Zed. Configurações
+personalizadas existentes do analisador são preservadas. Se o editor já estava
+aberto durante uma migração, reinicie seu servidor de linguagem. No Zed, use
+`editor: restart language server` na paleta de comandos.
 
 O Vite+ mantém seus prompts de linguagem, framework e gerenciador de pacotes;
 o FP não força npm, pnpm, Bun ou Yarn. O template é uma aplicação independente.
@@ -196,7 +231,10 @@ alterado. Após confirmar, a exclusão é permanente, incluindo arquivos ocultos
 subpastas e todo o conteúdo da fase quando essa opção for selecionada.
 
 O FP remove os registros cujos diretórios estão dentro da pasta excluída,
-preservando outros capítulos, o Justfile e materiais em `docs/`. Pastas da
+preservando outros capítulos, o Justfile e materiais em `docs/`. Remove também
+os caminhos explícitos dos membros uv dentro do destino; dependências da raiz,
+o ambiente compartilhado e o lockfile são preservados. O uv atualiza o lockfile
+na próxima sincronização ou execução. Pastas da
 convenção existente podem ser excluídas mesmo sem registro. Se um comando de
 outro registro usa `cwd` dentro do destino, a exclusão é bloqueada para não
 deixar um comando inválido. Links de fase/capítulo não são oferecidos; links
@@ -247,7 +285,8 @@ argv = ["cargo", "run", "--"]
 ```
 
 Um alvo pode ter `cwd = "subprojeto"`, relativo ao capítulo. Para Python:
-`argv = ["uv", "run", "main.py"]`. Só registre esse comando após criar o arquivo.
+`argv = ["uv", "run", "--all-packages", "main.py"]` para membros do workspace
+compartilhado. Só registre esse comando após criar o arquivo.
 Capítulos sem comandos possuem somente `path` e `name`. Outros alvos podem ser
 adicionados manualmente em `commands`; o dispatcher aceita `--task ALVO`.
 
@@ -271,10 +310,13 @@ Inicializadores trabalham em diretório temporário fora da árvore acadêmica,
 evitando detecção de workspaces ancestrais. O destino é reservado com criação
 exclusiva; arquivos são movidos, ou copiados entre filesystems. O registro é
 editado com preservação de comentários e publicado por substituição atômica,
-com verificação de alterações externas. Falhas normais removem somente o novo
-destino criado pela operação. Diretórios existentes nunca são substituídos.
+com verificação de alterações externas. A inclusão no manifesto uv participa do
+rollback se a publicação do registro falhar; alterações concorrentes não são
+sobrescritas. Falhas normais removem somente o novo destino criado pela operação.
+Diretórios existentes nunca são substituídos.
 
-O FP não cria workspaces de pacotes, commits, configurações globais ou atalhos do Omarchy.
+O FP configura apenas o workspace uv dos novos capítulos Python. Não cria
+workspaces Cargo/JavaScript, commits, configurações globais ou atalhos do Omarchy.
 
 ## Zed
 
@@ -338,11 +380,10 @@ Consulte [VALIDATION.md](VALIDATION.md) para os resultados desta implementação
   `.fp-init.lock`, staging ou novo destino; inspecione-os antes de remover manualmente.
 - A verificação de edição concorrente protege alterações observadas antes da
   publicação; editores que ignoram o lock ainda podem escrever nessa janela.
-- O contrato de integração é o `chapters.toml` FIAP. Receitas Just arbitrárias,
-  templates remotos personalizados e workspaces não são gerenciados.
-- A execução Python existente pode usar a `.venv` compartilhada do uv conforme o
-  dispatcher; o FP não muda essa política. Projetos independentes mantêm manifests
-  locais e não ganham ambiente até sua ferramenta precisar dele.
+- O contrato de integração é o `chapters.toml` FIAP. Receitas Just arbitrárias e
+  templates remotos personalizados não são gerenciados.
+- Novos capítulos Python compartilham o workspace uv. Projetos e comandos antigos
+  são preservados e precisam de migração explícita para aderir a esse modelo.
 - Melhorias possíveis: validar versões suportadas dos inicializadores e ampliar
   testes em ambientes com Vite+, hardware PlatformIO e Zed reais.
 

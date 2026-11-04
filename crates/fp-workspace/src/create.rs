@@ -1,4 +1,4 @@
-use crate::{Result, processes, registry};
+use crate::{Result, processes, python_workspace, registry};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -45,7 +45,7 @@ pub struct Plan {
 }
 
 impl Plan {
-    /// O nome do projeto é sempre o nome do diretório gerado pelo FP.
+    /// O nome visível do capítulo é o nome do diretório gerado pelo FP.
     fn name(&self) -> Result<&str> {
         self.target
             .file_name()
@@ -85,6 +85,11 @@ pub fn create(root: &Path, plan: &Plan, confirmed: bool) -> Result<Option<Vec<St
         .open(&lock_path)
         .map_err(|e| format!("Não foi possível obter .fp-init.lock: {e}"))?;
     let _lock = Lock(lock_path);
+    let python = if plan.chapter.is_some() && plan.technology == Technology::Python {
+        Some(python_workspace::Change::add(root, &plan.target)?)
+    } else {
+        None
+    };
     let before = fs::read_to_string(root.join("chapters.toml"))?;
     let mut doc = registry::load(root)?;
     if let Some((phase, chapter)) = plan.chapter
@@ -105,6 +110,9 @@ pub fn create(root: &Path, plan: &Plan, confirmed: bool) -> Result<Option<Vec<St
     } else {
         None
     };
+    if python.is_some() {
+        python_workspace::configure(root, &project, &plan.target)?;
+    }
     if let Some((phase, chapter)) = plan.chapter {
         let relative = plan
             .target
@@ -127,7 +135,17 @@ pub fn create(root: &Path, plan: &Plan, confirmed: bool) -> Result<Option<Vec<St
             publish_item(&item.path(), &plan.target.join(item.file_name()))?;
         }
         if plan.chapter.is_some() {
-            registry::save(root, &before, &doc)?;
+            if let Some(change) = &python {
+                change.apply(root)?;
+            }
+            if let Err(error) = registry::save(root, &before, &doc) {
+                if let Some(change) = &python {
+                    change
+                        .rollback(root)
+                        .map_err(|rollback| format!("{error}; {rollback}"))?;
+                }
+                return Err(error);
+            }
         }
         Ok(())
     })();
@@ -146,7 +164,13 @@ pub fn create(root: &Path, plan: &Plan, confirmed: bool) -> Result<Option<Vec<St
 }
 
 fn scaffold(root: &Path, plan: &Plan, path: &Path) -> Result<()> {
-    let name = plan.name()?;
+    let python_name;
+    let name = if plan.technology == Technology::Python {
+        python_name = python_workspace::name(&plan.target)?;
+        python_name.as_str()
+    } else {
+        plan.name()?
+    };
     let mut args: Vec<String> = match plan.technology {
         Technology::Python => vec![
             "init",
@@ -226,7 +250,12 @@ fn entrypoint(plan: &Plan, path: &Path) -> Result<Option<Vec<String>>> {
             if !path.join("main.py").is_file() {
                 return Err("uv init --app não criou main.py; criação cancelada para evitar capítulo sem comando".into());
             }
-            Some(vec!["uv".into(), "run".into(), "main.py".into()])
+            Some(vec![
+                "uv".into(),
+                "run".into(),
+                "--all-packages".into(),
+                "main.py".into(),
+            ])
         }
         Technology::Web if path.join("package.json").is_file() => {
             let data: serde_json::Value =

@@ -44,7 +44,10 @@ and experimentation environment, not a commercial product.
   Use Justfile as the central execution interface: just help, just list and
   just run PHASE CHAPTER [--task TARGET] [--] [ARGUMENTS...].
 - Commands are explicitly registered in chapters.toml. Do not invent chapters or
-  entrypoints. Keep manifests and lockfiles next to independent projects.
+  entrypoints. New Python chapters join the root uv workspace, sharing its .venv
+  and uv.lock. Add shared dependencies at the root; run members with
+  `uv run --all-packages main.py`. Keep other ecosystems' manifests and lockfiles
+  next to independent projects. Preserve existing standalone Python projects.
 - Use uv for Python, Vite+ for compatible JavaScript/TypeScript projects and Cargo
   for Rust where applicable. Do not introduce unnecessary dependencies or
   restructuring.

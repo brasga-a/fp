@@ -3,6 +3,7 @@ pub mod create;
 pub mod delete;
 pub mod discovery;
 pub mod processes;
+mod python_workspace;
 pub mod registry;
 pub mod root;
 pub mod workspace;
